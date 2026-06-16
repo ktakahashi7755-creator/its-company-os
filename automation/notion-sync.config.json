@@ -1,12 +1,13 @@
 {
-  "_comment": "file→NotionページID のマッピング。page_id は各Notionページ URL 末尾の32桁（秘密ではない）。空のページIDはスキップされる。財務(finance)はNotionワークスペースが非公開である前提で、高橋の承認後に有効化する。",
+  "_comment": "file→NotionページID のマッピング。page_id は各Notionページ URL 末尾の32桁（秘密ではない）。空のページIDは自動スキップ。財務(finance)はNotionが非公開（自分専用・共有なし）である前提で同期する（2026-06 高橋承認）。",
   "pages": [
     { "file": "data/営業進捗シート.md", "page_id": "", "title": "営業進捗シート" },
     { "file": "docs/kpi.md", "page_id": "", "title": "KPI" },
     { "file": "docs/action-plan.md", "page_id": "", "title": "アクションプラン" },
-    { "file": "docs/roadmap.md", "page_id": "", "title": "ロードマップ" }
-  ],
-  "_pending_finance_approval": [
-    { "file": "finance/TODO_緊急_税務.md", "page_id": "", "title": "緊急税務TODO" }
+    { "file": "docs/roadmap.md", "page_id": "", "title": "ロードマップ" },
+    { "file": "finance/TODO_緊急_税務.md", "page_id": "", "title": "緊急税務TODO" },
+    { "file": "finance/01_税金管理/納期限一覧.md", "page_id": "", "title": "納期限一覧" },
+    { "file": "finance/02_社会保険/未払い管理.md", "page_id": "", "title": "社会保険 未払い管理" },
+    { "file": "finance/04_役員貸付金チェック/チェック表.md", "page_id": "", "title": "役員貸付金チェック" }
   ]
 }
