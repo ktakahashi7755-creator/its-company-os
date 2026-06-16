@@ -1,0 +1,27 @@
+name: 毎朝のAI取締役会
+
+on:
+  schedule:
+    # GitHub ActionsのcronはUTC。7:00 JST = 22:00 UTC（前日）。
+    - cron: "0 22 * * *"
+  workflow_dispatch: {}   # 手動実行（テスト用）
+
+jobs:
+  board-meeting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r automation/requirements.txt
+      - name: Run AI board meeting
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}   # 任意（未設定なら claude-sonnet-4-6）
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: python automation/run_board_meeting.py
