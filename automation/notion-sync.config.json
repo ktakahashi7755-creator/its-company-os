@@ -1,0 +1,12 @@
+{
+  "_comment": "file→NotionページID のマッピング。page_id は各Notionページ URL 末尾の32桁（秘密ではない）。空のページIDはスキップされる。財務(finance)はNotionワークスペースが非公開である前提で、高橋の承認後に有効化する。",
+  "pages": [
+    { "file": "data/営業進捗シート.md", "page_id": "", "title": "営業進捗シート" },
+    { "file": "docs/kpi.md", "page_id": "", "title": "KPI" },
+    { "file": "docs/action-plan.md", "page_id": "", "title": "アクションプラン" },
+    { "file": "docs/roadmap.md", "page_id": "", "title": "ロードマップ" }
+  ],
+  "_pending_finance_approval": [
+    { "file": "finance/TODO_緊急_税務.md", "page_id": "", "title": "緊急税務TODO" }
+  ]
+}

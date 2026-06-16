@@ -1,0 +1,25 @@
+name: Notionへ自動同期
+
+on:
+  push:
+    branches: [main, claude/determined-cori-5uviua]
+    paths:
+      - "data/営業進捗シート.md"
+      - "docs/**"
+      - "finance/**"
+      - "automation/notion-sync.config.json"
+      - "automation/sync_to_notion.py"
+  workflow_dispatch: {}   # 手動実行
+
+jobs:
+  notion-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sync docs to Notion
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python automation/sync_to_notion.py

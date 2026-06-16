@@ -48,8 +48,44 @@ Actionsタブ →「毎朝のAI取締役会」→ Run workflow（workflow_dispat
 ### 7. 当日インプット（任意で精度UP）
 `automation/daily-input.example.md` を `automation/daily-input.md` にコピーして前夜に記入・push（または手動編集）すると、翌朝の取締役会がその内容（論点含む）を踏まえる。空でも動く。
 
+---
+
+# ドキュメントのNotion自動同期（営業進捗・財務・経営）
+
+経営OSのMarkdownを**Notionページへ綺麗にミラー同期**する仕組み。表・見出し・箇条書き・太字までNotionブロックに変換する。追記ではなく**ミラー（毎回クリア→最新で再生成）**なので、Notion側は常にファイルの現在値。
+
+## 構成
+- `automation/sync_to_notion.py` … Markdown→Notionブロック変換＋ミラー同期（標準ライブラリのみ）
+- `automation/notion-sync.config.json` … `file→page_id` のマッピング（page_idは秘密ではない）
+- `.github/workflows/notion-sync.yml` … 対象ファイルのpushで自動実行＋手動実行
+
+## セットアップ
+1. Notionインテグレーションのトークンを `NOTION_TOKEN`（Secret）に登録（取締役会と共用可）。
+2. **同期先ページをNotionで1つずつ作成**し、各ページの「接続」にインテグレーションを追加（共有）。
+3. 各ページURL末尾の32桁IDを `notion-sync.config.json` の対応する `page_id` に記入してpush。
+4. 以降、対象ファイルをpushすると自動でNotionへ反映。手動はActionsタブ →「Notionへ自動同期」→ Run workflow。
+
+## 使い方（ローカル確認）
+```
+python automation/sync_to_notion.py --file data/営業進捗シート.md --dry-run   # 変換結果を確認（ネットワーク不要）
+NOTION_TOKEN=xxx python automation/sync_to_notion.py                          # 実同期
+```
+
+## 対応Markdown
+見出し(#〜###)／表(GFM)／箇条書き・番号リスト／引用(>)／区切り(---)／コードフェンス／インラインの **太字**・`コード`・[リンク](url)。
+
+## 安全・前提
+- **財務(`finance/`)はNotionワークスペースが非公開である前提で、承認後に有効化**（`_pending_finance_approval` に保留）。
+- page_id未設定のエントリは自動スキップ。トークンはSecret管理（コードに直書きしない）。
+- これは整形・反映のみ。お金・法務の行動はしない。
+
+## 手で貼る場合（同期を使わないとき）
+各 `.md` の**生のMarkdownをコピー**してNotionに貼ると、Notionが自動変換（表・見出し・リストはそのまま整形）。1ファイル丸ごと貼れば綺麗に反映される。
+
+---
+
 ## コスト
-1日1回のSonnet呼び出し。入力は数千トークン、出力〜1,800トークン程度なので**1日あたり数円規模**（API課金）。GitHub Actionsはプライベートでも無料枠内で収まる想定。
+1日1回のSonnet呼び出し。入力は数千トークン、出力〜1,800トークン程度なので**1日あたり数円規模**（API課金）。GitHub Actionsはプライベートでも無料枠内で収まる想定。Notion同期はAPI課金なし（GitHub Actions実行のみ）。
 
 ## 安全・前提（重要）
 - 生成するのは**ブリーフィング（助言）**。自動で送金・契約・申告などの**行動はしない**。
