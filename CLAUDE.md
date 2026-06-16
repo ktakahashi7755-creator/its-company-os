@@ -118,8 +118,8 @@ its-company-os/
 
 このワークスペースで作業を始めるとき、最初に必ず：
 1. この CLAUDE.md（フェーズ・順序・優先順位・ガードレール）を踏まえる
-2. `docs/action-plan.md` `docs/kpi.md` `docs/roadmap.md` `finance/TODO_緊急_税務.md`（あれば `automation/daily-input.md`）を読む
-3. 「現状ブリーフィング」を出す：現在のフェーズ／今日の最優先TOP3（Phase 0基準）／見えているリスク・迫る期限／要・高橋判断の論点
+2. `docs/action-plan.md` `docs/kpi.md` `docs/roadmap.md` `finance/TODO_緊急_税務.md` `data/営業進捗シート.md`（あれば `automation/daily-input.md`）を読む
+3. 「現状ブリーフィング」を出す：現在のフェーズ／今日の最優先TOP3（Phase 0基準）／見えているリスク・迫る期限／**営業の現況（`data/営業進捗シート.md`のサマリー）**／要・高橋判断の論点
 4. その後、指示を待つ
 
 実行を毎回確実にしたい時は `起動プロンプト.md` を貼る。精度ルール：ファイルの事実を優先、数字は空欄/要確認で捏造しない、変更は提案→承認後に書く、実行は人間の承認を得る。
