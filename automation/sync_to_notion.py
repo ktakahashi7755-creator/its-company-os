@@ -220,6 +220,15 @@ def set_page_title(page_id, title_text):
          {"properties": {"title": {"title": [{"type": "text", "text": {"content": title_text}}]}}})
 
 
+def create_page(parent_id, title_text):
+    """親ページ配下に新規ページを作成し、ページIDを返す。"""
+    res = _req("POST", f"{API}/pages", {
+        "parent": {"type": "page_id", "page_id": parent_id},
+        "properties": {"title": {"title": [{"type": "text", "text": {"content": title_text}}]}},
+    })
+    return res["id"]
+
+
 def sync_page(file_rel, page_id, title):
     path = os.path.join(REPO_ROOT, file_rel)
     with open(path, encoding="utf-8") as f:
@@ -271,13 +280,25 @@ def main():
     if not os.environ.get("NOTION_TOKEN"):
         print("NOTION_TOKEN が未設定です。", file=sys.stderr)
         sys.exit(1)
+    parent = cfg.get("parent_page_id") or ""
     print("Notion同期を開始")
     for p in pages:
-        if not p.get("page_id"):
-            print(f"  [skip] {p['file']}: page_id 未設定")
-            continue
+        page_id = p.get("page_id")
+        if not page_id:
+            if not parent:
+                print(f"  [skip] {p['file']}: page_id 未設定（parent_page_id も未設定）")
+                continue
+            try:  # 親ページ配下に自動作成
+                page_id = create_page(parent, p.get("title", p["file"]))
+                print(f"  [created] {p['file']} => {page_id}  ← このIDをconfigに記入")
+            except urllib.error.HTTPError as e:
+                print(f"  [error] {p['file']} 作成失敗: {e.code} {e.read().decode('utf-8', 'ignore')}")
+                continue
+            except Exception as e:  # noqa
+                print(f"  [error] {p['file']} 作成失敗: {e}")
+                continue
         try:
-            sync_page(p["file"], p["page_id"], p.get("title", p["file"]))
+            sync_page(p["file"], page_id, p.get("title", p["file"]))
         except urllib.error.HTTPError as e:
             print(f"  [error] {p['file']}: {e.code} {e.read().decode('utf-8', 'ignore')}")
         except Exception as e:  # noqa
