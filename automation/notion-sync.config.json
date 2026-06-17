@@ -1,15 +1,13 @@
 {
-  "_comment": "file→NotionページID のマッピング。page_id 空 + parent_page_id 設定済みなら、その親ページ配下に自動作成する（作成後 [created] でIDがログに出るので config に転記）。財務(finance)はNotionが非公開（自分専用・共有なし）前提で同期する（2026-06 高橋承認）。2026-06-17：管理を新PJページに一本化。",
+  "_comment": "file→NotionページID のマッピング（git側＝安定文書のみ同期）。運用憲章に従い、業務データ（営業進捗・KPI実績・パイプライン等）はgit同期から外し、Notion MCPで直接管理する（2026-06-17 縮退）。財務トラッキングはフック非対象のため当面git同期を維持。",
   "parent_page_id": "38244f16-641f-80d4-9a45-cfae344184ea",
   "pages": [
-    { "file": "data/営業進捗シート.md", "page_id": "38244f16-641f-81b0-9fa4-ff554e1b97c5", "title": "営業進捗シート" },
     { "file": "data/面談準備_京楽_SR.md", "page_id": "38244f16-641f-81b0-b1ae-f3db1bde8982", "title": "面談準備 京楽SR" },
 
     { "file": "CLAUDE.md", "page_id": "38244f16-641f-81e6-99cd-edfa26b9bdb7", "title": "経営マスター（考え方・順序・ガードレール）" },
     { "file": "docs/business-plan.md", "page_id": "38244f16-641f-8137-8e96-c0e22dddabe3", "title": "事業計画" },
     { "file": "docs/action-plan.md", "page_id": "38244f16-641f-8152-b977-c5c1bd68ec97", "title": "アクションプラン" },
     { "file": "docs/roadmap.md", "page_id": "38244f16-641f-817f-b53b-ffc2be0d12a9", "title": "ロードマップ" },
-    { "file": "docs/kpi.md", "page_id": "38244f16-641f-8160-ac51-c0795d96d1ac", "title": "KPI" },
     { "file": "docs/financial-model.md", "page_id": "38244f16-641f-810e-88b7-ddeb77b7659a", "title": "財務モデル" },
     { "file": "docs/exit-plan.md", "page_id": "38244f16-641f-814c-91b3-db465566a7ba", "title": "出口プラン" },
 
