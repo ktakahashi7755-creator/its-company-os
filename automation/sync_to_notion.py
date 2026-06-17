@@ -214,19 +214,33 @@ def append_blocks(page_id, blocks):
              {"children": blocks[j:j + 90]})
 
 
+def set_page_title(page_id, title_text):
+    """ページの題名（タイトル）を更新。最新版が日付で一目で分かるようにする。"""
+    _req("PATCH", f"{API}/pages/{page_id}",
+         {"properties": {"title": {"title": [{"type": "text", "text": {"content": title_text}}]}}})
+
+
 def sync_page(file_rel, page_id, title):
     path = os.path.join(REPO_ROOT, file_rel)
     with open(path, encoding="utf-8") as f:
         md = f.read()
-    ts = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M JST")
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    date = now.strftime("%Y/%m/%d")
+    ts = now.strftime("%Y-%m-%d %H:%M JST")
+    page_title = f"{title} {date}"  # 題名に日付＝最新版がひと目で分かる
     header = [
-        _block("paragraph", rich_text=_rt(f"このページは {file_rel} から自動同期。最終同期 {ts}（手動編集は上書きされます）")),
+        _block("paragraph", rich_text=_rt(
+            f"オーナー：高橋賢弥 ｜ {file_rel} から自動同期 ｜ 最新版＝題名の日付（{date}）｜ 最終同期 {ts}（手動編集は次回同期で上書き）")),
         _block("divider"),
     ]
     blocks = header + md_to_blocks(md)
     removed = clear_page(page_id)
     append_blocks(page_id, blocks)
-    print(f"  [ok] {file_rel} → {title} (旧{removed}ブロック削除 / 新{len(blocks)}ブロック)")
+    try:
+        set_page_title(page_id, page_title)
+    except Exception as e:  # noqa
+        print(f"    [warn] 題名更新に失敗: {e}")
+    print(f"  [ok] {file_rel} → 「{page_title}」(旧{removed}ブロック削除 / 新{len(blocks)}ブロック)")
 
 
 def load_config():
