@@ -4,18 +4,18 @@
   "pages": [
     { "file": "data/営業進捗シート.md", "page_id": "38244f16-641f-8075-a1bd-e9baf5e47838", "title": "営業進捗シート" },
 
-    { "file": "CLAUDE.md", "page_id": "", "title": "経営マスター（考え方・順序・ガードレール）" },
-    { "file": "docs/business-plan.md", "page_id": "", "title": "事業計画" },
-    { "file": "docs/action-plan.md", "page_id": "", "title": "アクションプラン" },
-    { "file": "docs/roadmap.md", "page_id": "", "title": "ロードマップ" },
-    { "file": "docs/kpi.md", "page_id": "", "title": "KPI" },
-    { "file": "docs/financial-model.md", "page_id": "", "title": "財務モデル" },
-    { "file": "docs/exit-plan.md", "page_id": "", "title": "出口プラン" },
+    { "file": "CLAUDE.md", "page_id": "38244f16-641f-8184-9564-cb2a85df08b0", "title": "経営マスター（考え方・順序・ガードレール）" },
+    { "file": "docs/business-plan.md", "page_id": "38244f16-641f-81d5-ab7f-ceaa8a16eb08", "title": "事業計画" },
+    { "file": "docs/action-plan.md", "page_id": "38244f16-641f-8114-9685-cdc291e8e784", "title": "アクションプラン" },
+    { "file": "docs/roadmap.md", "page_id": "38244f16-641f-814c-8e64-c21a108488ac", "title": "ロードマップ" },
+    { "file": "docs/kpi.md", "page_id": "38244f16-641f-817d-8fe5-f48a2ed333b4", "title": "KPI" },
+    { "file": "docs/financial-model.md", "page_id": "38244f16-641f-8103-bf05-ecdce3de9000", "title": "財務モデル" },
+    { "file": "docs/exit-plan.md", "page_id": "38244f16-641f-8195-a0c9-f278201d2d99", "title": "出口プラン" },
 
-    { "file": "finance/TODO_緊急_税務.md", "page_id": "", "title": "緊急税務TODO" },
-    { "file": "finance/00_会社基本情報.md", "page_id": "", "title": "会社基本情報" },
-    { "file": "finance/01_税金管理/納期限一覧.md", "page_id": "", "title": "納期限一覧" },
-    { "file": "finance/02_社会保険/未払い管理.md", "page_id": "", "title": "社会保険 未払い管理" },
-    { "file": "finance/04_役員貸付金チェック/チェック表.md", "page_id": "", "title": "役員貸付金チェック" }
+    { "file": "finance/TODO_緊急_税務.md", "page_id": "38244f16-641f-8117-b4f5-ccc05462578e", "title": "緊急税務TODO" },
+    { "file": "finance/00_会社基本情報.md", "page_id": "38244f16-641f-8134-ab40-d5539e966222", "title": "会社基本情報" },
+    { "file": "finance/01_税金管理/納期限一覧.md", "page_id": "38244f16-641f-8191-9e61-d9ff3bf00d7f", "title": "納期限一覧" },
+    { "file": "finance/02_社会保険/未払い管理.md", "page_id": "38244f16-641f-813a-a4f2-c97f3af82125", "title": "社会保険 未払い管理" },
+    { "file": "finance/04_役員貸付金チェック/チェック表.md", "page_id": "38244f16-641f-81c1-b120-fd03343495e9", "title": "役員貸付金チェック" }
   ]
 }
