@@ -1,6 +1,6 @@
 {
   "_comment": "file→NotionページID のマッピング。page_id 空 + parent_page_id 設定済みなら、その親ページ配下に自動作成する（作成後 [created] でIDがログに出るので config に転記）。財務(finance)はNotionが非公開（自分専用・共有なし）前提で同期する（2026-06 高橋承認）。",
-  "parent_page_id": "",
+  "parent_page_id": "38244f16-641f-80a0-899c-ee923354c5fa",
   "pages": [
     { "file": "data/営業進捗シート.md", "page_id": "38244f16-641f-8075-a1bd-e9baf5e47838", "title": "営業進捗シート" },
 
