@@ -1,33 +1,71 @@
-# SETUP — Claude Codeで使い始める手順
+# セットアップ手順(初回の一度だけ)
 
-リポジトリ作成は前提ではない。Claude CodeはローカルフォルダをそのままはOK。
-git/GitHub化はバックアップと自動化のための推奨ステップ。
+この引き継ぎパッケージの目的は、**高橋が毎回ルールを覚えて指示しなくても、
+Claude Code 側が自動的に正しい運用をする**状態を作ること。
 
-## A. 最小で使い始める（GitHub不要・今すぐ）
-1. its-company-os.zip を解凍
-   - Mac/Linux: `unzip its-company-os.zip -d ~/projects/`
-   - Windows: 右クリック→展開、または `Expand-Archive its-company-os.zip`
-2. （未導入なら）Claude Codeを入れる ※Node.js必要
-   `npm install -g @anthropic-ai/claude-code`
-3. フォルダで起動（CLAUDE.mdが自動で読まれる）
-   `cd its-company-os && claude`
-4. 最初の一言で確認
-   - 「CLAUDE.mdを読んで、今のフェーズと最優先を3行で」
-   - 「skills/board-meeting/SKILL.md に従って今朝の取締役会を回して」
+## 仕組みの考え方(なぜこれで「自動」になるか)
 
-## B. 推奨：git化＋プライベートGitHub
-5. `git init && git add . && git commit -m "initial: ITS経営OS"`
-6. `gh repo create its-company-os --private --source=. --remote=origin --push`
-   - 財務情報が入るので必ず private
-   - gh未認証なら先に `gh auth login`
-   - Web UIで作る場合: 空のprivateリポジトリ作成 → `git remote add origin <URL>` → `git push -u origin main`
-7. （自動化する時）GitHub Settings → Secrets に ANTHROPIC_API_KEY 等を登録 → 毎朝のActionsが動く
+- このチャットから Claude Code へ直接つなぎ込む「ライブ連携」は存在しない。
+  会話の内容を勝手にリポジトリへ反映する経路は無い。
+- 代わりに、Claude Code には次の自動機構がある:
+  - **`CLAUDE.md`** … リポジトリ直下に置くと、毎セッションの冒頭で自動的に読み込まれる。
+    ここに書いたルールが「毎回の前提」になる。
+  - **`.claude/settings.json` のフック** … ハーネス(Claude Code 本体)が実行する。
+    Claude 自身は回避・スキップできない。ルールの「強制」を担う。
+- つまり **一度リポジトリに置けば、以降は指示ゼロで効き続ける**。
+  これが「全部自動で反映」の正攻法。
 
-※5〜6はClaude Code自身に実行させてもよい（git/gh）。GitHubアカウントとgh認証は事前に必要。
+> 注意: `CLAUDE.md` は強い文脈ではあるが「文脈」であって絶対強制ではない。
+> 「業務データを git に入れない」のような絶対に守らせたい一線はフックで強制する設計にしている。
 
-## スキルの自動起動（任意）
-skills/ は CLAUDE.md が読みに行くので今のままで機能する。
-Claude Code純正の「スキル」として説明文で自動起動させたい場合は .claude/skills/ 配下へ。
+## 配置
 
-## 順番
-まずAだけで十分。B（git/GitHub）と自動化は後からでOK。
+`its-keiei-os` リポジトリの直下に、この構成のまま置く:
+
+```
+its-keiei-os/
+├── CLAUDE.md
+└── .claude/
+    ├── settings.json
+    └── hooks/
+        └── guard-operational-data.sh
+```
+
+## コマンド(リポジトリのルートで実行)
+
+```bash
+# 1. フックを実行可能にする
+chmod +x .claude/hooks/guard-operational-data.sh
+
+# 2. Claude Code を再起動(またはセッションを開き直す)
+#    → CLAUDE.md が自動で読み込まれる
+
+# 3. 読み込み確認
+/memory        # CLAUDE.md が認識されているか確認
+/hooks         # フックが登録されているか確認
+
+# 4. 動作テスト(ブロックされれば成功)
+#    Claude Code に「営業進捗.md を git add してコミットして」と頼む
+#    → フックが BLOCKED を返して止まればOK
+```
+
+## Notion 側(MCP)
+
+- Notion に **マスターページを1枚** 作る。これが「正本の地図」のもう一方の入口。
+- 営業進捗・タスク・KPI・議事録・顧客メモは、すべてこのマスターページ配下にまとめる。
+- 既に MCP 連携済みなら追加設定は不要。Claude Code が CLAUDE.md の振り分け表に従い、
+  業務データを自動で Notion 側へ書き込む。
+
+## 個人的なメモ・一時的な設定
+
+- 自分だけの好みや、スプリント固有の一時メモは `CLAUDE.local.md` に書く。
+  これはコミットされず、チーム(将来の共有メモリ層)に影響しない。
+
+## 運用のコツ
+
+- `CLAUDE.md` は **50〜200行** に保つ。短いほど確実に守られる。
+  詳細が増えたら別ドキュメントに逃がして、CLAUDE.md からはリンクするだけにする。
+- 新しい恒久ルールが生まれたら CLAUDE.md に追記。
+  「今回だけ」のルールは Claude Code 上で `#` から始めて伝えると、そのセッション限定で効く。
+- Familink リポジトリにも同じ構造の `CLAUDE.md` を置き、振り分け表と
+  共有メモリ層の参照を書いておくと、2リポジトリの運用が揃う。
