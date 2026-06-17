@@ -23,6 +23,7 @@ import sys
 import json
 import argparse
 import datetime
+import subprocess
 import urllib.request
 import urllib.error
 
@@ -257,10 +258,24 @@ def load_config():
         return json.load(f)
 
 
+def changed_files():
+    """直近コミット（HEAD~1..HEAD）で変更されたファイル一覧。取得失敗時は None（=全同期にフォールバック）。"""
+    try:
+        out = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+        )
+        return {ln.strip() for ln in out.stdout.splitlines() if ln.strip()}
+    except Exception:  # noqa  履歴が浅い等
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="変換JSONを表示（ネットワークなし）")
     ap.add_argument("--file", help="単一ファイルのみ対象")
+    ap.add_argument("--changed-only", action="store_true",
+                    help="直近コミットで変更されたファイルのみ同期（未作成ページは常に作成）")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -281,9 +296,16 @@ def main():
         print("NOTION_TOKEN が未設定です。", file=sys.stderr)
         sys.exit(1)
     parent = cfg.get("parent_page_id") or ""
+    changed = changed_files() if args.changed_only else None
+    if changed is not None:
+        print(f"変更ファイルのみ同期: {sorted(changed) or '（なし）'}")
     print("Notion同期を開始")
     for p in pages:
         page_id = p.get("page_id")
+        # 変更ファイルのみモード：未作成(page_id空)は常に作成、それ以外は変更時のみ
+        if changed is not None and page_id and p["file"] not in changed:
+            print(f"  [unchanged] {p['file']} スキップ")
+            continue
         if not page_id:
             if not parent:
                 print(f"  [skip] {p['file']}: page_id 未設定（parent_page_id も未設定）")

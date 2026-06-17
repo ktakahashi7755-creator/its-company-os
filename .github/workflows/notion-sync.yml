@@ -16,10 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # 変更ファイル検出のため直前コミットも取得
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Sync docs to Notion
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-        run: python automation/sync_to_notion.py
+        run: python automation/sync_to_notion.py --changed-only
