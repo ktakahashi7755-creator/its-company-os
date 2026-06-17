@@ -3,6 +3,7 @@
   "parent_page_id": "38244f16-641f-80d4-9a45-cfae344184ea",
   "pages": [
     { "file": "data/営業進捗シート.md", "page_id": "38244f16-641f-81b0-9fa4-ff554e1b97c5", "title": "営業進捗シート" },
+    { "file": "data/面談準備_京楽_SR.md", "page_id": "", "title": "面談準備 京楽SR" },
 
     { "file": "CLAUDE.md", "page_id": "38244f16-641f-81e6-99cd-edfa26b9bdb7", "title": "経営マスター（考え方・順序・ガードレール）" },
     { "file": "docs/business-plan.md", "page_id": "38244f16-641f-8137-8e96-c0e22dddabe3", "title": "事業計画" },
