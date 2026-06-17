@@ -35,13 +35,21 @@ case "$cmd" in
   *) exit 0 ;;
 esac
 
+# 同期管理下の確定ファイルは git コミットを許可（運用方式A：git→Notion同期の対象）。
+# allowlist のパスは検査文字列から除去してからパターン判定する。
+allow='data/営業進捗シート.md docs/kpi.md'
+scan="$cmd"
+for a in $allow; do
+  scan="${scan//"$a"/}"
+done
+
 # Notion に置くべき業務データを示すパスパターン
 patterns='営業進捗 商談 パイプライン pipeline sales-progress sales_progress
 日次 daily-log daily_log kpi 実績 議事録 minutes meeting-notes
 顧客メモ customer-notes crm タスク状況 task-status'
 
 for p in $patterns; do
-  if printf '%s' "$cmd" | grep -iq -- "$p"; then
+  if printf '%s' "$scan" | grep -iq -- "$p"; then
     {
       echo "BLOCKED: \"$p\" は更新頻度の高い業務データです。git ではなく Notion(MCP)へ記録してください。"
       echo "ルール: 営業進捗・タスク状況・日次ログ・KPI実績・議事録・顧客メモ → Notion。"
