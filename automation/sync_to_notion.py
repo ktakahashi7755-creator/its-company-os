@@ -262,10 +262,12 @@ def changed_files():
     """直近コミット（HEAD~1..HEAD）で変更されたファイル一覧。取得失敗時は None（=全同期にフォールバック）。"""
     try:
         out = subprocess.run(
-            ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+            # core.quotepath=false：日本語等の非ASCIIパスをエスケープせず素のUTF-8で出す
+            # （これが無いと "data/\\346..." となりconfigのパスと一致せず誤スキップする）
+            ["git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD~1", "HEAD"],
             cwd=REPO_ROOT, capture_output=True, text=True, check=True,
         )
-        return {ln.strip() for ln in out.stdout.splitlines() if ln.strip()}
+        return {ln.strip().strip('"') for ln in out.stdout.splitlines() if ln.strip()}
     except Exception:  # noqa  履歴が浅い等
         return None
 
