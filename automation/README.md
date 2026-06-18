@@ -67,20 +67,29 @@ Actionsタブ →「毎朝のAI取締役会」→ Run workflow（workflow_dispat
 - `.github/workflows/sync-pipeline-notion.yml` … `data/pipeline.md` `data/bp-list.md` `data/partners.md` への push で自動実行＋手動実行。
 - `automation/sync_pipeline_to_notion.py` … 上記Markdownテーブルを読み、Notionの表ブロックに変換して反映。
 
-### 仕組み（重要）
-- **ミラー方式**：実行のたびに対象ページの既存ブロックを全削除→最新内容で書き直し。常に最新シートの鏡になる（追記の重複なし）。
-- このため、対象ページは**この営業ミラー専用のページ**を用意すること（他のメモと同居させない）。
+### 2つのモード（`NOTION_SYNC_MODE`）
+- **append（既定・安全）**：既存ブロックを一切消さず、ページ末尾に「日時付きスナップショット」を追記。
+  **朝会の議事録など他の内容があるページと共用しても消えない。** スナップショットは溜まっていく。
+- **mirror（専用ページのみ）**：実行のたびに対象ページの既存ブロックを全削除→最新で書き直し。
+  常に最新シートの鏡（重複なし）だが、ページ内の他の内容も消すため**ミラー専用ページにのみ使う**。
 
-### セットアップ
+### セットアップ（朝会と同じページに追記する場合＝推奨ラク）
 1. `NOTION_TOKEN` は朝会と同じものでOK（同じインテグレーション）。
-2. 営業ミラー専用のNotionページを新規作成し、インテグレーションを「接続」で共有。
-3. そのページの32桁IDを `NOTION_PIPELINE_PAGE_ID`（Secrets）に登録。
-   - 未設定の場合は `NOTION_PAGE_ID` にフォールバックするが、朝会ページと共用するとブロックが消されるため**専用ページ推奨**。
+2. `NOTION_SYNC_MODE` は未設定でOK（既定 `append`）。明示するなら Variables に `append`。
+3. 反映先は朝会ページを使うので、追加のページID設定は不要（`NOTION_PAGE_ID` をそのまま利用）。
+   - 専用ページに分けたい場合のみ、専用ページを作成・共有し `NOTION_PIPELINE_PAGE_ID`（Secrets）に登録。
 4. シートを編集してpushすると自動反映。Actionsタブ →「営業進捗をNotionへ反映」→ Run workflow で手動実行も可。
+
+### 専用ページで鏡にしたい場合
+- Variables に `NOTION_SYNC_MODE=mirror` を設定し、`NOTION_PIPELINE_PAGE_ID` に**専用ページ**のIDを登録する。
+  （mirror を朝会ページに向けると議事録が消えるので厳禁）
 
 ### 手元で動かす（任意）
 ```
-NOTION_TOKEN=xxx NOTION_PIPELINE_PAGE_ID=yyy python automation/sync_pipeline_to_notion.py
+# 朝会ページに追記（安全）
+NOTION_TOKEN=xxx NOTION_PAGE_ID=yyy python automation/sync_pipeline_to_notion.py
+# 専用ページを鏡にする
+NOTION_TOKEN=xxx NOTION_SYNC_MODE=mirror NOTION_PIPELINE_PAGE_ID=zzz python automation/sync_pipeline_to_notion.py
 ```
 
 ### 安全・前提

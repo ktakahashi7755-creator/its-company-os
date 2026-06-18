@@ -21,7 +21,10 @@ jobs:
       - name: Sync sales sheets to Notion
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          # 営業ミラー専用ページ。未設定なら NOTION_PAGE_ID にフォールバック。
+          # append(既定/安全): 既存を消さず末尾に追記。朝会と同じページでも安全。
+          # mirror: 専用ページの全消去→書き直し。専用ページにのみ使う。
+          NOTION_SYNC_MODE: ${{ vars.NOTION_SYNC_MODE }}
+          # 反映先ページ。専用にするなら NOTION_PIPELINE_PAGE_ID、朝会と共用なら NOTION_PAGE_ID。
           NOTION_PIPELINE_PAGE_ID: ${{ secrets.NOTION_PIPELINE_PAGE_ID }}
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
         run: python automation/sync_pipeline_to_notion.py

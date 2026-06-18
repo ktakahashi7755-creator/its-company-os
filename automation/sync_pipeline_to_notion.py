@@ -5,18 +5,22 @@
 何をするか:
 - data/pipeline.md / data/bp-list.md / data/partners.md を読み、
   各 Markdown テーブルを Notion の table ブロックへ変換し、指定ページに反映する。
-- ミラー方式: 実行のたびに「対象ページの既存ブロックを全削除 → 最新内容で書き直し」。
-  これにより Notion ページが常に最新シートの鏡になる（追記による重複を避ける）。
+
+2つのモード（NOTION_SYNC_MODE で切替。既定は安全な append）:
+- append（既定 / 安全）: 既存ブロックを一切削除せず、ページ末尾に「日時付きスナップショット」を追記する。
+  朝会の議事録など他の内容があるページと共用しても消えない。スナップショットは溜まっていく。
+- mirror（要・専用ページ）: 実行のたびに対象ページの既存ブロックを全削除→最新内容で書き直し。
+  常に最新シートの鏡になる（重複なし）が、ページ内の他の内容も消すため**ミラー専用ページにのみ使う**。
 
 重要:
 - これは「シートの内容を Notion へ転記する」だけ。お金・法務の判断はしない。
 - 資料にない数値は補完しない（シートにある内容をそのまま反映する）。
-- 対象ページは「このミラー専用」を指定すること（既存ブロックを消去するため）。
 
 環境変数:
   NOTION_TOKEN            (必須) Notion インテグレーションのトークン
-  NOTION_PIPELINE_PAGE_ID (推奨) 営業ミラー専用ページのID。未設定なら NOTION_PAGE_ID を使う
-  NOTION_PAGE_ID          (任意) 取締役会と同じページを使い回す場合のフォールバック
+  NOTION_SYNC_MODE        (任意) "append"(既定) または "mirror"
+  NOTION_PIPELINE_PAGE_ID (推奨) 反映先ページのID。未設定なら NOTION_PAGE_ID を使う
+  NOTION_PAGE_ID          (任意) 朝会と同じページに追記する場合などのフォールバック
 """
 import os
 import sys
@@ -104,13 +108,21 @@ def paragraph_block(text):
             "paragraph": {"rich_text": rich_text(text)}}
 
 
-def build_blocks():
+def build_blocks(mode="append"):
     jst = datetime.timezone(datetime.timedelta(hours=9))
     now = datetime.datetime.now(jst).strftime("%Y-%m-%d %H:%M JST")
-    blocks = [
-        heading_block("営業進捗（自動反映）", 1),
-        paragraph_block(f"最終更新: {now} ／ 出典: data/ の各シート（このページは自動ミラー）"),
-    ]
+    if mode == "append":
+        # 共用ページに溜める前提。区切りと日時付き見出しで1スナップショットを明示。
+        blocks = [
+            {"object": "block", "type": "divider", "divider": {}},
+            heading_block(f"営業進捗 スナップショット {now}", 1),
+            paragraph_block("出典: data/ の各シート（このセクションは自動追記）"),
+        ]
+    else:
+        blocks = [
+            heading_block("営業進捗（自動反映）", 1),
+            paragraph_block(f"最終更新: {now} ／ 出典: data/ の各シート（このページは自動ミラー）"),
+        ]
     for title, rel in SHEETS:
         md = read_file(rel)
         blocks.append(heading_block(title, 2))
@@ -169,6 +181,10 @@ def append_blocks(page_id, headers, blocks):
 def main():
     token = os.environ.get("NOTION_TOKEN")
     page_id = os.environ.get("NOTION_PIPELINE_PAGE_ID") or os.environ.get("NOTION_PAGE_ID")
+    mode = os.environ.get("NOTION_SYNC_MODE", "append").strip().lower()
+    if mode not in ("append", "mirror"):
+        print(f"NOTION_SYNC_MODE は append か mirror。受け取った値: {mode}", file=sys.stderr)
+        sys.exit(1)
     if not token or not page_id:
         print("NOTION_TOKEN と NOTION_PIPELINE_PAGE_ID（または NOTION_PAGE_ID）が必要です。",
               file=sys.stderr)
@@ -178,11 +194,14 @@ def main():
         "Content-Type": "application/json",
         "Notion-Version": NOTION_VERSION,
     }
-    blocks = build_blocks()
+    blocks = build_blocks(mode)
     try:
-        clear_page(page_id, headers)
+        if mode == "mirror":
+            # 専用ページ前提。既存ブロックを消して書き直す。
+            clear_page(page_id, headers)
+        # append は何も消さず末尾に追記するだけ。
         append_blocks(page_id, headers, blocks)
-        print("[notion] 営業進捗を反映しました。")
+        print(f"[notion] 営業進捗を反映しました（mode={mode}）。")
     except urllib.error.HTTPError as e:
         print(f"[notion] error {e.code}: {e.read().decode('utf-8', 'ignore')}", file=sys.stderr)
         sys.exit(1)
