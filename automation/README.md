@@ -56,5 +56,33 @@ Actionsタブ →「毎朝のAI取締役会」→ Run workflow（workflow_dispat
 - 税務・法務の最終判断は税理士・弁護士へ。スクリプトもその旨を出力に添える設計。
 - APIキー等は必ずGitHub Secretsで管理（コードに直書きしない）。
 - Phase 0フィルター（「8月の生存と健全化を脅かさないか」）をプロンプトに内蔵。
-EOF
-echo "README done"
+
+---
+
+## 営業進捗のNotion自動反映
+
+`data/` の営業シートをNotionページへ**自動ミラー**する仕組み（取締役会とは別）。
+
+### 構成
+- `.github/workflows/sync-pipeline-notion.yml` … `data/pipeline.md` `data/bp-list.md` `data/partners.md` への push で自動実行＋手動実行。
+- `automation/sync_pipeline_to_notion.py` … 上記Markdownテーブルを読み、Notionの表ブロックに変換して反映。
+
+### 仕組み（重要）
+- **ミラー方式**：実行のたびに対象ページの既存ブロックを全削除→最新内容で書き直し。常に最新シートの鏡になる（追記の重複なし）。
+- このため、対象ページは**この営業ミラー専用のページ**を用意すること（他のメモと同居させない）。
+
+### セットアップ
+1. `NOTION_TOKEN` は朝会と同じものでOK（同じインテグレーション）。
+2. 営業ミラー専用のNotionページを新規作成し、インテグレーションを「接続」で共有。
+3. そのページの32桁IDを `NOTION_PIPELINE_PAGE_ID`（Secrets）に登録。
+   - 未設定の場合は `NOTION_PAGE_ID` にフォールバックするが、朝会ページと共用するとブロックが消されるため**専用ページ推奨**。
+4. シートを編集してpushすると自動反映。Actionsタブ →「営業進捗をNotionへ反映」→ Run workflow で手動実行も可。
+
+### 手元で動かす（任意）
+```
+NOTION_TOKEN=xxx NOTION_PIPELINE_PAGE_ID=yyy python automation/sync_pipeline_to_notion.py
+```
+
+### 安全・前提
+- これは**シート内容の転記のみ**。お金・法務の判断や数値の補完はしない（シートにある内容をそのまま反映）。
+- 資料にない金額は反映されない（シート側で空欄管理のまま）。

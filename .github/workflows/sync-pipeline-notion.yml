@@ -1,0 +1,27 @@
+name: 営業進捗をNotionへ反映
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "data/pipeline.md"
+      - "data/bp-list.md"
+      - "data/partners.md"
+      - "automation/sync_pipeline_to_notion.py"
+  workflow_dispatch: {}   # 手動実行
+
+jobs:
+  sync-notion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sync sales sheets to Notion
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          # 営業ミラー専用ページ。未設定なら NOTION_PAGE_ID にフォールバック。
+          NOTION_PIPELINE_PAGE_ID: ${{ secrets.NOTION_PIPELINE_PAGE_ID }}
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
+        run: python automation/sync_pipeline_to_notion.py
