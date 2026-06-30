@@ -1,57 +1,58 @@
 <!doctype html>
-<!-- 自動生成（家族向け・スクショ用）。出典：IMG_9099（高橋確認済）。デザイン基準は ../_sample/交通費一覧_サンプル.html -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>交通費一覧 2026年7月</title>
+<title>日次出納帳 2026年7月</title>
 <style>
   body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
-       color:#222;background:#fff;margin:0;padding:32px;line-height:1.6;}
-  .wrap{max-width:760px;margin:0 auto;}
-  h2{font-size:20px;font-weight:700;margin:8px 0 16px;}
-  table{width:100%;border-collapse:collapse;margin-bottom:8px;}
-  th{font-weight:600;color:#555;text-align:left;font-size:14px;border-bottom:2px solid #e3e3e3;padding:10px 8px;}
-  td{padding:14px 8px;border-bottom:1px solid #eee;font-size:15px;}
-  td.store{font-weight:600;}
-  .total{margin-top:28px;}.total .row{font-size:16px;margin:4px 0;}.total .row b{font-weight:700;}
-  .balance{margin-top:28px;}
-  .balance .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;max-width:520px;}
-  .balance .item{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:10px 4px;font-size:15px;}
+       color:#1a1a1a;background:#fff;margin:0;padding:28px;line-height:1.5;}
+  .wrap{max-width:680px;margin:0 auto;}
+  .month{font-size:18px;font-weight:700;margin:0 0 16px;}
+  h3{font-size:16px;font-weight:700;margin:0 0 6px;padding:6px 10px;background:#f4f6f8;border-left:4px solid #6b8bbd;}
+  section{margin-bottom:26px;}
+  table.ledger{width:100%;border-collapse:collapse;font-size:14px;}
+  table.ledger th,table.ledger td{border:1px solid #cfd8e3;padding:7px 8px;}
+  table.ledger th{background:#eef2f7;color:#445;font-weight:600;font-size:13px;}
+  table.ledger td.date{white-space:nowrap;width:50px;color:#333;}
+  table.ledger td.sum,table.ledger th.sum{text-align:right;width:90px;}
+  table.ledger td.bal{text-align:right;width:98px;font-weight:600;background:#fafbfc;}
+  table.ledger tr.carry td{background:#f7faf7;font-weight:600;}
 </style>
 </head>
 <body>
 <div class="wrap">
+  <p class="month">日次出納帳　2026年7月</p>
 
-  <h2>【交通費一覧】<span style="font-size:14px;color:#999;font-weight:400;">2026年7月</span></h2>
-  <table>
-    <thead>
-      <tr><th>店舗</th><th>稼働日数</th><th>往復分交通費</th><th>交通費合計</th></tr>
-    </thead>
-    <tbody>
-      <tr><td class="store">蒲田</td>    <td>16日</td><td>1,741円</td><td>27,856円</td></tr>
-      <tr><td class="store">分倍河原</td><td>5日</td> <td>844円</td>  <td>4,220円</td></tr>
-      <tr><td class="store">武蔵小杉</td><td>2日</td> <td>1,702円</td><td>3,404円</td></tr>
-      <tr><td class="store">調布</td>    <td>2日</td> <td>1,210円</td><td>2,420円</td></tr>
-      <tr><td class="store">座間</td>    <td>1日</td> <td>1,866円</td><td>1,866円</td></tr>
-      <tr><td class="store">港南台</td>  <td>1日</td> <td>2,714円</td><td>2,714円</td></tr>
-    </tbody>
-  </table>
+  <section>
+    <h3>① 手持ち現金</h3>
+    <table class="ledger">
+      <thead><tr><th>月日</th><th>摘要</th><th class="sum">収入金額</th><th class="sum">支払金額</th><th class="sum">差引残高</th></tr></thead>
+      <tbody>
+        <tr class="carry"><td class="date">7/1</td><td>繰越</td><td class="sum"></td><td class="sum"></td><td class="bal">37</td></tr>
+        <tr><td class="date">7/1</td><td>収入</td><td class="sum">10,000</td><td class="sum"></td><td class="bal">10,037</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-  <div class="total">
-    <h2>【合計】</h2>
-    <div class="row">稼働日数：<b>27日</b></div>
-    <div class="row">交通費合計：<b>42,480円</b></div>
-  </div>
+  <section>
+    <h3>② PASMO</h3>
+    <table class="ledger">
+      <thead><tr><th>月日</th><th>摘要</th><th class="sum">収入金額</th><th class="sum">支払金額</th><th class="sum">差引残高</th></tr></thead>
+      <tbody>
+        <tr class="carry"><td class="date">7/1</td><td>PASMO残高（繰越）</td><td class="sum"></td><td class="sum"></td><td class="bal">353</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-  <div class="balance">
-    <h2>【残高】</h2>
-    <div class="grid">
-      <div class="item"><span>手持ち残高</span><span>—円</span></div>
-      <div class="item"><span>PASMO口座残高</span><span>—円</span></div>
-      <div class="item"><span>個人口座残高</span><span>—円</span></div>
-      <div class="item"><span>法人口座残高</span><span>—円</span></div>
-    </div>
-  </div>
+  <section>
+    <h3>③ 個人口座</h3>
+    <table class="ledger">
+      <thead><tr><th>月日</th><th>摘要</th><th class="sum">収入金額</th><th class="sum">支払金額</th><th class="sum">差引残高</th></tr></thead>
+      <tbody>
+        <tr class="carry"><td class="date">7/1</td><td>個人口座残高（繰越）</td><td class="sum"></td><td class="sum"></td><td class="bal">949</td></tr>
+      </tbody>
+    </table>
+  </section>
 
 </div>
 </body>
