@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- 家族向け 日次出納帳テンプレート（手書き帳簿風）。口座ごとに <section> を複製して使う。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>日次出納帳（テンプレート）</title>
+<style>
+  body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+       color:#1a1a1a;background:#fff;margin:0;padding:28px;line-height:1.5;}
+  .wrap{max-width:720px;margin:0 auto;}
+  .month{font-size:18px;font-weight:700;margin:0 0 4px;}
+  .sub{color:#999;font-size:12px;margin:0 0 18px;}
+  section{margin-bottom:30px;}
+  h3{font-size:16px;font-weight:700;margin:0 0 6px;padding:6px 10px;background:#f4f6f8;border-left:4px solid #6b8bbd;}
+  table.ledger{width:100%;border-collapse:collapse;font-size:14px;}
+  table.ledger th,table.ledger td{border:1px solid #cfd8e3;padding:7px 8px;}
+  table.ledger th{background:#eef2f7;color:#445;font-weight:600;font-size:13px;}
+  table.ledger td.date{white-space:nowrap;width:54px;color:#333;}
+  table.ledger td.sum,table.ledger th.sum{text-align:right;width:96px;}
+  table.ledger td.bal{text-align:right;width:104px;font-weight:600;background:#fafbfc;}
+  table.ledger tr.carry td{background:#f7faf7;font-weight:600;}
+  .pending{color:#aa8800;font-size:13px;padding:10px;background:#fffbe9;border:1px dashed #e3d08a;border-radius:4px;}
+  .month-total{margin-top:6px;font-size:13px;color:#666;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="month">日次出納帳 <span style="font-weight:400;color:#888;">YYYY年M月</span></p>
+  <p class="sub">手書き帳簿の清書版（家族提出用）</p>
+
+  <!-- 口座セクション（①手持ち現金 ②PASMO ③個人口座 ④法人口座）。各々この形をコピー -->
+  <section>
+    <h3>① 手持ち現金</h3>
+    <table class="ledger">
+      <thead><tr><th>月日</th><th>摘要</th><th class="sum">収入金額</th><th class="sum">支払金額</th><th class="sum">差引残高</th></tr></thead>
+      <tbody>
+        <tr class="carry"><td class="date">M/D</td><td>繰越</td><td class="sum"></td><td class="sum"></td><td class="bal">0</td></tr>
+        <!-- 毎日分を1行ずつ追記 -->
+      </tbody>
+    </table>
+  </section>
+
+  <p class="month-total">【月計】交通費合計：—円／稼働日数：—日</p>
+</div>
+</body>
+</html>
