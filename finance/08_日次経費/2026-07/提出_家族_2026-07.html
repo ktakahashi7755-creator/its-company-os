@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 自動生成（家族向け・スクショ用）。元データは ../明細.md ＋ ../残高.md。デザイン基準は ../_sample/交通費一覧_サンプル.html -->
+<!-- 自動生成（家族向け・スクショ用）。出典：IMG_9099（高橋確認済）。デザイン基準は ../_sample/交通費一覧_サンプル.html -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -17,7 +17,6 @@
   .balance{margin-top:28px;}
   .balance .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;max-width:520px;}
   .balance .item{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:10px 4px;font-size:15px;}
-  .empty{color:#999;padding:24px 8px;}
 </style>
 </head>
 <body>
@@ -29,16 +28,19 @@
       <tr><th>店舗</th><th>稼働日数</th><th>往復分交通費</th><th>交通費合計</th></tr>
     </thead>
     <tbody>
-      <!-- 記録が入ると店舗行が生成される。7月の行き先候補と確定往復額：
-           蒲田1,741／分倍河原844／武蔵小杉1,702／調布1,210／座間1,866／港南台2,714 -->
-      <tr><td class="empty" colspan="4">記録待ち（今日の内容を送ると反映されます）</td></tr>
+      <tr><td class="store">蒲田</td>    <td>16日</td><td>1,741円</td><td>27,856円</td></tr>
+      <tr><td class="store">分倍河原</td><td>5日</td> <td>844円</td>  <td>4,220円</td></tr>
+      <tr><td class="store">武蔵小杉</td><td>2日</td> <td>1,702円</td><td>3,404円</td></tr>
+      <tr><td class="store">調布</td>    <td>2日</td> <td>1,210円</td><td>2,420円</td></tr>
+      <tr><td class="store">座間</td>    <td>1日</td> <td>1,866円</td><td>1,866円</td></tr>
+      <tr><td class="store">港南台</td>  <td>1日</td> <td>2,714円</td><td>2,714円</td></tr>
     </tbody>
   </table>
 
   <div class="total">
     <h2>【合計】</h2>
-    <div class="row">稼働日数：<b>—日</b></div>
-    <div class="row">交通費合計：<b>—円</b></div>
+    <div class="row">稼働日数：<b>27日</b></div>
+    <div class="row">交通費合計：<b>42,480円</b></div>
   </div>
 
   <div class="balance">
