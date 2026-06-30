@@ -79,15 +79,16 @@ its-company-os/
 │   ├── finance-cfo/         売上/利益/資金繰り/着地
 │   ├── ses-sales/ ses-ops/  SES営業・契約/請求/資金
 │   ├── ai-jutaku/           AI受託
+│   ├── daily-expense/       日次の経費・交通費・残高（話すだけ→税理士&家族フォーマット）
 │   ├── familink-dev/ familink-launch/  開発・ストア公開
 │   └── management-meeting/  毎朝のAI経営会議
 ├── templates/          提案・見積・スキルシート・朝会・取締役会
-├── finance/            税務/経理の運用データ（00〜07・金額は空欄管理）
+├── finance/            税務/経理の運用データ（00〜08・金額は空欄管理）
 ├── bridge/             Familink開発リポジトリとの紐付けキット
 └── data/               BP・協力会社・パイプライン
 ```
 
-タスク→読むSKILL.md：決算/税/社保→`tax-compliance`、資金繰り/着地→`finance-cfo`、SES→`ses-sales`/`ses-ops`、受託→`ai-jutaku`、Familink実装→`familink-dev`、ストア公開→`familink-launch`、朝会→`management-meeting`。実装・分析の前に必ず該当SKILL.mdを読む。
+タスク→読むSKILL.md：決算/税/社保→`tax-compliance`、資金繰り/着地→`finance-cfo`、SES→`ses-sales`/`ses-ops`、受託→`ai-jutaku`、日次の経費・交通費・残高（移動中に話すだけ→税理士&家族フォーマット）→`daily-expense`、Familink実装→`familink-dev`、ストア公開→`familink-launch`、朝会→`management-meeting`。実装・分析の前に必ず該当SKILL.mdを読む。
 
 **AI経営本部（10 CXO）と取締役会：** 判断には `skills/executives/` のCXO（CEO/CFO/COO/CLO/CHRO/CGO/CPO/CTO/Data/秘書）の視点を使う。CXOは判断のレンズ、機能スキルは実務の手順——CXOが機能スキルを使う関係。**重要な判断（大きな投資・採用・撤退・資金・契約・出口・方針転換）は単独で決めず `skills/board-meeting/`（AI取締役会）で多視点にかけ、最終決定は高橋。** 役割分担＝人間はVision・決断・人間関係、AIは分析・整理・実行補助・監視・改善・自動化。長期は少人数で大企業価値を狙うAI Nativeな会社を目指すが、**現在はPhase 0。野心は長期に持ち、毎判断はまず「8月の生存と健全化を脅かさないか」で濾す。**
 
