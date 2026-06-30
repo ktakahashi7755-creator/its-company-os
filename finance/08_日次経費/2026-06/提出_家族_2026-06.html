@@ -1,96 +1,72 @@
 <!doctype html>
-<!-- 家族向け 日次出納帳（手書き帳簿風）・2026年6月・暫定版。PASMO面のみ反映、他口座は判読保留。 -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>日次出納帳 2026年6月（暫定）</title>
+<title>日次出納帳 2026年6月</title>
 <style>
   body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
        color:#1a1a1a;background:#fff;margin:0;padding:28px;line-height:1.5;}
-  .wrap{max-width:720px;margin:0 auto;}
-  .month{font-size:18px;font-weight:700;margin:0 0 4px;}
-  .sub{color:#999;font-size:12px;margin:0 0 4px;}
-  .draft{display:inline-block;font-size:12px;color:#c0392b;border:1px solid #e7b7b1;border-radius:4px;padding:2px 8px;margin:0 0 16px;}
-  section{margin-bottom:30px;}
+  .wrap{max-width:680px;margin:0 auto;}
+  .month{font-size:18px;font-weight:700;margin:0 0 16px;}
   h3{font-size:16px;font-weight:700;margin:0 0 6px;padding:6px 10px;background:#f4f6f8;border-left:4px solid #6b8bbd;}
   table.ledger{width:100%;border-collapse:collapse;font-size:14px;}
   table.ledger th,table.ledger td{border:1px solid #cfd8e3;padding:7px 8px;}
   table.ledger th{background:#eef2f7;color:#445;font-weight:600;font-size:13px;}
-  table.ledger td.date{white-space:nowrap;width:54px;color:#333;}
-  table.ledger td.sum,table.ledger th.sum{text-align:right;width:92px;}
-  table.ledger td.bal{text-align:right;width:100px;font-weight:600;background:#fafbfc;}
+  table.ledger td.date{white-space:nowrap;width:50px;color:#333;}
+  table.ledger td.sum,table.ledger th.sum{text-align:right;width:90px;}
+  table.ledger td.bal{text-align:right;width:98px;font-weight:600;background:#fafbfc;}
   table.ledger tr.carry td{background:#f7faf7;font-weight:600;}
-  .pending{color:#9a7d00;font-size:13px;padding:10px;background:#fffbe9;border:1px dashed #e3d08a;border-radius:4px;}
-  .month-total{margin-top:6px;font-size:13px;color:#666;}
-  .q{color:#c0392b;}
+  .month-total{margin-top:8px;font-size:14px;color:#333;}
+  .month-total b{font-weight:700;}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <p class="month">日次出納帳 <span style="font-weight:400;color:#888;">2026年6月</span></p>
-  <p class="sub">手書き帳簿の清書版（家族提出用）</p>
-  <div class="draft">暫定・確認待ち（<span class="q">?</span>＝判読未確定）</div>
+  <p class="month">日次出納帳　2026年6月</p>
 
   <section>
-    <h3>① 手持ち現金</h3>
-    <div class="pending">手書きの手持ち現金面は判読保留中。確定後に毎日分を反映します。</div>
-  </section>
-
-  <section>
-    <h3>② PASMO</h3>
+    <h3>PASMO</h3>
     <table class="ledger">
       <thead><tr><th>月日</th><th>摘要</th><th class="sum">収入金額</th><th class="sum">支払金額</th><th class="sum">差引残高</th></tr></thead>
       <tbody>
-        <tr class="carry"><td class="date">6/1</td><td>PASMO残高（繰越）</td><td class="sum"></td><td class="sum"></td><td class="bal">1,560<span class="q">?</span></td></tr>
-        <tr><td class="date">6/1</td><td>チャージ</td><td class="sum">2,000</td><td class="sum"></td><td class="bal">3,560<span class="q">?</span></td></tr>
-        <tr><td class="date">6/1</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,748<span class="q">?</span></td><td class="bal">1,812<span class="q">?</span></td></tr>
-        <tr><td class="date">6/2</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,748<span class="q">?</span></td><td class="bal">64<span class="q">?</span></td></tr>
-        <tr><td class="date">6/3</td><td>チャージ</td><td class="sum">2,000</td><td class="sum"></td><td class="bal">2,064<span class="q">?</span></td></tr>
-        <tr><td class="date">6/3</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">675<span class="q">?</span></td><td class="bal">1,389<span class="q">?</span></td></tr>
-        <tr><td class="date">6/4</td><td>チャージ</td><td class="sum">3,000</td><td class="sum"></td><td class="bal">4,389<span class="q">?</span></td></tr>
-        <tr><td class="date">6/4</td><td>清瀬・池袋〜立川・東久留米</td><td class="sum"></td><td class="sum">1,361<span class="q">?</span></td><td class="bal">3,028<span class="q">?</span></td></tr>
-        <tr><td class="date">6/5</td><td>〜池袋</td><td class="sum"></td><td class="sum">646<span class="q">?</span></td><td class="bal">2,382<span class="q">?</span></td></tr>
-        <tr><td class="date">6/6</td><td>清瀬〜池袋</td><td class="sum"></td><td class="sum">646<span class="q">?</span></td><td class="bal">1,736<span class="q">?</span></td></tr>
-        <tr><td class="date">6/7</td><td>東久留米〜雪が谷</td><td class="sum"></td><td class="sum">1,612<span class="q">?</span></td><td class="bal">124<span class="q">?</span></td></tr>
-        <tr><td class="date">6/8</td><td>チャージ</td><td class="sum">4,000</td><td class="sum"></td><td class="bal">4,124<span class="q">?</span></td></tr>
-        <tr><td class="date">6/8</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,203<span class="q">?</span></td><td class="bal">2,921<span class="q">?</span></td></tr>
-        <tr><td class="date">6/9</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">2,077<span class="q">?</span></td></tr>
-        <tr><td class="date">6/9</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">1,233<span class="q">?</span></td></tr>
-        <tr><td class="date">6/10</td><td>清瀬〜分倍河原</td><td class="sum"></td><td class="sum">646<span class="q">?</span></td><td class="bal">587<span class="q">?</span></td></tr>
-        <tr><td class="date">6/11</td><td>チャージ</td><td class="sum">3,000</td><td class="sum"></td><td class="bal">3,587<span class="q">?</span></td></tr>
-        <tr><td class="date">6/11</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646<span class="q">?</span></td><td class="bal">2,941<span class="q">?</span></td></tr>
-        <tr><td class="date">6/12</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646<span class="q">?</span></td><td class="bal">2,295<span class="q">?</span></td></tr>
-        <tr><td class="date">6/13</td><td>清瀬〜池袋</td><td class="sum"></td><td class="sum">1,519<span class="q">?</span></td><td class="bal">776<span class="q">?</span></td></tr>
-        <tr><td class="date">6/14</td><td>チャージ</td><td class="sum">5,000</td><td class="sum"></td><td class="bal">5,776<span class="q">?</span></td></tr>
-        <tr><td class="date">6/14</td><td>東久留米〜雪が谷大塚</td><td class="sum"></td><td class="sum"><span class="q">?</span></td><td class="bal"><span class="q">?</span></td></tr>
-        <tr><td class="date">6/15</td><td>チャージ</td><td class="sum">1,748<span class="q">?</span></td><td class="sum"></td><td class="bal"><span class="q">?</span></td></tr>
-        <tr><td class="date">6/15</td><td>東久留米〜蒲田（650+1,220）</td><td class="sum"></td><td class="sum">1,870<span class="q">?</span></td><td class="bal">2,158<span class="q">?</span></td></tr>
-        <tr><td class="date">6/16</td><td>東久留米〜調布〜分倍〜スポーツ施設</td><td class="sum"></td><td class="sum">1,748<span class="q">?</span></td><td class="bal">410<span class="q">?</span></td></tr>
-        <tr><td class="date">6/17</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum"><span class="q">?</span></td><td class="bal">140<span class="q">?</span></td></tr>
-        <tr><td class="date">6/18</td><td>チャージ</td><td class="sum">646<span class="q">?</span></td><td class="sum"></td><td class="bal">768<span class="q">?</span></td></tr>
-        <tr><td class="date">6/18</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646<span class="q">?</span></td><td class="bal"><span class="q">?</span></td></tr>
-        <tr><td class="date">6/19</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646<span class="q">?</span></td><td class="bal">118<span class="q">?</span></td></tr>
-        <tr><td class="date">6/21</td><td>チャージ</td><td class="sum">5,000</td><td class="sum"></td><td class="bal">5,118<span class="q">?</span></td></tr>
-        <tr><td class="date">6/21</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,771<span class="q">?</span></td><td class="bal">3,347<span class="q">?</span></td></tr>
-        <tr><td class="date">6/22</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">2,503<span class="q">?</span></td></tr>
-        <tr><td class="date">6/23</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">1,659<span class="q">?</span></td></tr>
-        <tr><td class="date">6/24</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">815<span class="q">?</span></td></tr>
-        <tr><td class="date">6/25</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">169<span class="q">?</span></td></tr>
-        <tr><td class="date">6/25</td><td>チャージ</td><td class="sum">1,000</td><td class="sum"></td><td class="bal">1,169<span class="q">?</span></td></tr>
-        <tr><td class="date">6/26</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">523<span class="q">?</span></td></tr>
+        <tr class="carry"><td class="date">6/1</td><td>PASMO残高（繰越）</td><td class="sum"></td><td class="sum"></td><td class="bal">1,560</td></tr>
+        <tr><td class="date">6/1</td><td>チャージ</td><td class="sum">2,000</td><td class="sum"></td><td class="bal">3,560</td></tr>
+        <tr><td class="date">6/1</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,748</td><td class="bal">1,812</td></tr>
+        <tr><td class="date">6/2</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,748</td><td class="bal">64</td></tr>
+        <tr><td class="date">6/3</td><td>チャージ</td><td class="sum">2,000</td><td class="sum"></td><td class="bal">2,064</td></tr>
+        <tr><td class="date">6/3</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">675</td><td class="bal">1,389</td></tr>
+        <tr><td class="date">6/4</td><td>チャージ</td><td class="sum">3,000</td><td class="sum"></td><td class="bal">4,389</td></tr>
+        <tr><td class="date">6/4</td><td>清瀬・池袋〜立川・東久留米</td><td class="sum"></td><td class="sum">1,361</td><td class="bal">3,028</td></tr>
+        <tr><td class="date">6/5</td><td>〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">2,382</td></tr>
+        <tr><td class="date">6/6</td><td>清瀬〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">1,736</td></tr>
+        <tr><td class="date">6/7</td><td>東久留米〜雪が谷</td><td class="sum"></td><td class="sum">1,612</td><td class="bal">124</td></tr>
+        <tr><td class="date">6/8</td><td>チャージ</td><td class="sum">4,000</td><td class="sum"></td><td class="bal">4,124</td></tr>
+        <tr><td class="date">6/8</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,203</td><td class="bal">2,921</td></tr>
+        <tr><td class="date">6/9</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">2,077</td></tr>
+        <tr><td class="date">6/9</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">1,233</td></tr>
+        <tr><td class="date">6/10</td><td>清瀬〜分倍河原</td><td class="sum"></td><td class="sum">646</td><td class="bal">587</td></tr>
+        <tr><td class="date">6/11</td><td>チャージ</td><td class="sum">3,000</td><td class="sum"></td><td class="bal">3,587</td></tr>
+        <tr><td class="date">6/11</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">2,941</td></tr>
+        <tr><td class="date">6/12</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">2,295</td></tr>
+        <tr><td class="date">6/13</td><td>清瀬〜池袋</td><td class="sum"></td><td class="sum">1,519</td><td class="bal">776</td></tr>
+        <tr><td class="date">6/14</td><td>チャージ</td><td class="sum">5,000</td><td class="sum"></td><td class="bal">5,776</td></tr>
+        <tr><td class="date">6/14</td><td>東久留米〜雪が谷大塚</td><td class="sum"></td><td class="sum">1,748</td><td class="bal">4,028</td></tr>
+        <tr><td class="date">6/15</td><td>東久留米〜蒲田（650+1,220）</td><td class="sum"></td><td class="sum">1,870</td><td class="bal">2,158</td></tr>
+        <tr><td class="date">6/16</td><td>東久留米〜調布〜分倍〜スポーツ施設</td><td class="sum"></td><td class="sum">1,748</td><td class="bal">410</td></tr>
+        <tr><td class="date">6/17</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum"></td><td class="bal"></td></tr>
+        <tr><td class="date">6/18</td><td>チャージ</td><td class="sum">646</td><td class="sum"></td><td class="bal">768</td></tr>
+        <tr><td class="date">6/19</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">118</td></tr>
+        <tr><td class="date">6/21</td><td>チャージ</td><td class="sum">5,000</td><td class="sum"></td><td class="bal">5,118</td></tr>
+        <tr><td class="date">6/21</td><td>東久留米〜蒲田</td><td class="sum"></td><td class="sum">1,771</td><td class="bal">3,347</td></tr>
+        <tr><td class="date">6/22</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">2,503</td></tr>
+        <tr><td class="date">6/23</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">1,659</td></tr>
+        <tr><td class="date">6/24</td><td>東久留米〜分倍河原</td><td class="sum"></td><td class="sum">844</td><td class="bal">815</td></tr>
+        <tr><td class="date">6/25</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">169</td></tr>
+        <tr><td class="date">6/25</td><td>チャージ</td><td class="sum">1,000</td><td class="sum"></td><td class="bal">1,169</td></tr>
+        <tr><td class="date">6/26</td><td>東久留米〜池袋</td><td class="sum"></td><td class="sum">646</td><td class="bal">523</td></tr>
       </tbody>
     </table>
-    <p class="month-total">【月計】交通費合計：23,799円（確定分のみ・暫定）／稼働日数：25日／未確定：6/11・6/14・6/17</p>
-  </section>
-
-  <section>
-    <h3>③ 個人口座</h3>
-    <div class="pending">手書きの個人口座面は判読保留中。確定後に毎日分を反映します。</div>
-  </section>
-
-  <section>
-    <h3>④ 法人口座</h3>
-    <div class="pending">資料なし（要確認）。</div>
+    <p class="month-total">交通費合計　<b>26,391円</b>　／　稼働　<b>24日</b></p>
   </section>
 
 </div>
