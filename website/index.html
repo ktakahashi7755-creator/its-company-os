@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ITS合同会社 | AI導入支援・Web制作・ITソリューション</title>
+<meta name="description" content="中小企業のAI導入を、診断から実装まで。ChatGPT・Claude導入支援、業務自動化、ホームページ制作・運用。まずは30分の無料診断から。">
+<style>
+  :root{
+    --navy:#1a2b4a; --navy-2:#24385e; --accent:#2f6fed; --accent-2:#eaf1fe;
+    --text:#2b3340; --muted:#66707f; --bg:#ffffff; --bg-2:#f6f8fb; --line:#e3e8ef;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;color:var(--text);background:var(--bg);line-height:1.8}
+  .wrap{max-width:960px;margin:0 auto;padding:0 20px}
+  header{position:sticky;top:0;background:rgba(255,255,255,.95);border-bottom:1px solid var(--line);z-index:10}
+  .nav{display:flex;justify-content:space-between;align-items:center;height:60px}
+  .logo{font-weight:700;color:var(--navy);font-size:1.1rem}
+  .nav a.cta{background:var(--accent);color:#fff;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:.9rem;font-weight:600}
+  .hero{background:linear-gradient(160deg,var(--navy) 0%,var(--navy-2) 70%);color:#fff;padding:72px 0 64px}
+  .hero h1{font-size:clamp(1.5rem,4vw,2.2rem);line-height:1.5;font-weight:700}
+  .hero p.lead{margin-top:18px;color:#c9d4e8;max-width:620px}
+  .hero .btns{margin-top:28px;display:flex;gap:12px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:13px 26px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.95rem}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{border:1px solid #7e8fae;color:#dfe7f4}
+  section{padding:64px 0}
+  section.alt{background:var(--bg-2)}
+  h2{color:var(--navy);font-size:1.5rem;margin-bottom:8px}
+  .sub{color:var(--muted);margin-bottom:32px;font-size:.95rem}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:26px}
+  .card h3{color:var(--navy);font-size:1.05rem;margin-bottom:10px}
+  .card p{font-size:.92rem;color:var(--text)}
+  .card .price{margin-top:14px;font-size:.85rem;color:var(--accent);font-weight:700}
+  .steps{counter-reset:s;display:grid;gap:14px;max-width:640px}
+  .step{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 20px 18px 58px;position:relative;font-size:.95rem}
+  .step::before{counter-increment:s;content:counter(s);position:absolute;left:18px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--accent-2);color:var(--accent);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:.9rem}
+  .why li{list-style:none;padding:10px 0 10px 30px;position:relative;font-size:.95rem}
+  .why li::before{content:"✓";position:absolute;left:4px;color:var(--accent);font-weight:700}
+  .cta-band{background:var(--navy);color:#fff;text-align:center;padding:56px 0}
+  .cta-band h2{color:#fff}
+  .cta-band p{color:#c9d4e8;margin:10px 0 26px;font-size:.95rem}
+  table{width:100%;border-collapse:collapse;background:#fff;font-size:.92rem}
+  th,td{border:1px solid var(--line);padding:12px 14px;text-align:left}
+  th{background:var(--accent-2);color:var(--navy);white-space:nowrap}
+  .note{font-size:.8rem;color:var(--muted);margin-top:10px}
+  footer{background:var(--bg-2);border-top:1px solid var(--line);padding:36px 0;font-size:.85rem;color:var(--muted)}
+  footer .company{color:var(--navy);font-weight:700;margin-bottom:6px}
+  @media (max-width:600px){ .hero{padding:52px 0 44px} section{padding:48px 0} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="logo">ITS合同会社</div>
+    <a class="cta" href="#contact">無料診断を申し込む</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <h1>AI導入、ツールを契約する前に。<br>「どの業務から始めるか」を30分で診断します。</h1>
+    <p class="lead">ITS合同会社は、自社の経営・開発そのものを生成AI（ChatGPT / Claude）で運営している会社です。その実践から得た「現場で本当に効く使い方」を、中小企業のみなさまに導入します。作れるので、提案で終わりません。</p>
+    <div class="btns">
+      <a class="btn btn-primary" href="#contact">無料AI活用診断（30分・オンライン）</a>
+      <a class="btn btn-ghost" href="#services">サービスを見る</a>
+    </div>
+  </div>
+</div>
+
+<section id="services">
+  <div class="wrap">
+    <h2>サービス</h2>
+    <p class="sub">小さく始めて、効果を確認してから広げる。すべてのサービスがこの順序で設計されています。</p>
+    <div class="cards">
+      <div class="card">
+        <h3>AI導入支援</h3>
+        <p>ChatGPT・Claudeの導入設計、社内利用ガイドライン、半日研修、御社業務に合わせたプロンプト集まで。「何から始めるか」の診断から伴走します。</p>
+        <p class="price">AIスタートパック ¥250,000〜（2週間）</p>
+      </div>
+      <div class="card">
+        <h3>業務自動化・AI開発</h3>
+        <p>問い合わせ対応の下書き、日報・帳票の整理、社内ナレッジ検索など、業務を1つ選んで自動化を実装。効果を実測してから次に進みます。</p>
+        <p class="price">自動化PoC ¥300,000〜（3〜4週間）</p>
+      </div>
+      <div class="card">
+        <h3>ホームページ制作・運用</h3>
+        <p>作って終わりにしません。公開後の更新・月次レポート・AIチャット応対まで含めて、問い合わせが増えるサイトを運用します。</p>
+        <p class="price">LP制作 ¥250,000〜／運用 月¥20,000〜</p>
+      </div>
+      <div class="card">
+        <h3>AI顧問（月額）</h3>
+        <p>月1回の相談とチャット質問対応から。AI活用を「一度きりの研修」で終わらせず、毎月の改善として定着させます。</p>
+        <p class="price">月額 ¥50,000〜（3ヶ月単位）</p>
+      </div>
+    </div>
+    <p class="note">※価格は税別・標準的な場合の目安です。ITエンジニアのご提案（SES）についてもお気軽にご相談ください。</p>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2>ITSが選ばれる理由</h2>
+    <p class="sub">大手コンサルの資料でも、ツール会社の営業でもなく、「実装できる相談相手」です。</p>
+    <ul class="why">
+      <li><strong>自社がAI経営の実験台。</strong>経理・営業・開発・経営会議まで生成AIで運営し、効いたものだけをお客様に提供します。</li>
+      <li><strong>診断が先、契約は後。</strong>AIが向かない業務には「向かない」とお伝えします。既存ツールで足りるなら、それをお勧めします。</li>
+      <li><strong>小さく始める価格設計。</strong>数百万円の構想資料ではなく、数十万円で動くものから。効果を実測してから広げます。</li>
+      <li><strong>セキュリティ方針。</strong>お客様のパスワード・認証情報をお預かりする作業は行いません。</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>進め方</h2>
+    <p class="sub">最初の一歩は無料です。</p>
+    <div class="steps">
+      <div class="step"><strong>無料AI活用診断（30分・オンライン）</strong>— 業務の棚卸しをして、AIが効く業務・効かない業務を仕分けします。</div>
+      <div class="step"><strong>診断レポートをお渡し（無料）</strong>— 最初に着手すべき業務と、始める場合の選択肢を1枚にまとめてお送りします。</div>
+      <div class="step"><strong>ご判断</strong>— 進める場合のみ、お見積り・ご提案へ。診断だけで終えていただいて構いません。</div>
+    </div>
+  </div>
+</section>
+
+<div class="cta-band" id="contact">
+  <div class="wrap">
+    <h2>無料AI活用診断を申し込む</h2>
+    <p>メールに「会社名・お名前・ご都合の良い日時」をご記入ください。1営業日以内にご返信します。</p>
+    <a class="btn btn-primary" href="mailto:k.takahashi.7755@gmail.com?subject=%E7%84%A1%E6%96%99AI%E6%B4%BB%E7%94%A8%E8%A8%BA%E6%96%AD%E3%81%AE%E7%94%B3%E3%81%97%E8%BE%BC%E3%81%BF&body=%E4%BC%9A%E7%A4%BE%E5%90%8D%EF%BC%9A%0A%E3%81%8A%E5%90%8D%E5%89%8D%EF%BC%9A%0A%E3%81%94%E9%83%BD%E5%90%88%E3%81%AE%E8%89%AF%E3%81%84%E6%97%A5%E6%99%82%EF%BC%9A%0A%E6%B0%97%E3%81%AB%E3%81%AA%E3%81%A3%E3%81%A6%E3%81%84%E3%82%8B%E6%A5%AD%E5%8B%99%E3%83%BB%E8%AA%B2%E9%A1%8C%EF%BC%88%E4%BB%BB%E6%84%8F%EF%BC%89%EF%BC%9A">メールで申し込む</a>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="company">ITS合同会社</div>
+    <p>事業内容：AI導入支援／業務自動化・AI開発／ホームページ制作・運用／ITエンジニアリングサービス（SES）／自社サービス開発</p>
+    <p>お問い合わせ：k.takahashi.7755@gmail.com</p>
+  </div>
+</footer>
+
+</body>
+</html>
