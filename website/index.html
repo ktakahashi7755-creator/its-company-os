@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ITS合同会社｜AI活用で速く・安く・高品質なホームページ制作とシステム開発</title>
+<meta name="description" content="ITS合同会社は最新のAI開発体制で、ホームページ制作を3万円台から最短3日で提供します。業務システム・AIチャットボット開発にも対応。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0f1e33; --navy2:#16304f; --accent:#0e7ce6; --accent2:#0a5fb3;
+    --bg:#ffffff; --bg-soft:#f4f7fb; --text:#22303f; --muted:#5b6b7c; --line:#e3e9f0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{font-family:'Noto Sans JP',sans-serif;color:var(--text);background:var(--bg);line-height:1.8}
+  img{max-width:100%}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+  section{padding:72px 0}
+  h2{font-size:1.75rem;font-weight:900;color:var(--navy);text-align:center;margin-bottom:8px}
+  .sub{color:var(--muted);text-align:center;font-size:.95rem;margin-bottom:44px}
+
+  /* header */
+  header{position:sticky;top:0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:10}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .logo{font-weight:900;color:var(--navy);font-size:1.1rem;letter-spacing:.02em}
+  .logo span{color:var(--accent)}
+  nav ul{display:flex;gap:24px;list-style:none;font-size:.9rem;font-weight:500}
+  nav a:hover{color:var(--accent)}
+  .nav-cta{background:var(--accent);color:#fff;padding:8px 18px;border-radius:999px;font-weight:700;font-size:.85rem}
+  .nav-cta:hover{background:var(--accent2);color:#fff}
+  @media(max-width:720px){nav ul{display:none}}
+
+  /* hero */
+  .hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 60%,#1d4472 100%);color:#fff;padding:96px 0;text-align:center}
+  .hero .badge{display:inline-block;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:4px 16px;font-size:.8rem;letter-spacing:.08em;margin-bottom:24px;color:#cfe3ff}
+  .hero h1{font-size:clamp(1.6rem,4.5vw,2.6rem);font-weight:900;line-height:1.5;margin-bottom:20px}
+  .hero h1 em{font-style:normal;color:#7dbcff}
+  .hero p{color:#c4d3e6;max-width:640px;margin:0 auto 36px;font-size:.98rem}
+  .hero-cta{display:inline-block;background:var(--accent);color:#fff;font-weight:700;padding:14px 40px;border-radius:999px;font-size:1rem;box-shadow:0 8px 24px rgba(14,124,230,.35);transition:.2s}
+  .hero-cta:hover{background:var(--accent2);transform:translateY(-2px)}
+  .hero-note{margin-top:14px;font-size:.8rem;color:#9fb4cc}
+
+  /* stats strip */
+  .strip{background:var(--bg-soft);border-bottom:1px solid var(--line)}
+  .strip .wrap{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;padding-top:20px;padding-bottom:20px}
+  .chip{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 22px;text-align:center}
+  .chip b{display:block;color:var(--accent);font-size:1.25rem;font-weight:900;line-height:1.3}
+  .chip small{color:var(--muted);font-size:.75rem}
+
+  /* services */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+  .card{border:1px solid var(--line);border-radius:14px;padding:32px 28px;background:#fff;display:flex;flex-direction:column;transition:.2s}
+  .card:hover{box-shadow:0 12px 32px rgba(15,30,51,.10);transform:translateY(-3px)}
+  .card.featured{border:2px solid var(--accent);position:relative}
+  .card.featured::before{content:"いちばん人気";position:absolute;top:-13px;left:24px;background:var(--accent);color:#fff;font-size:.72rem;font-weight:700;padding:3px 14px;border-radius:999px}
+  .card h3{color:var(--navy);font-size:1.15rem;font-weight:700;margin-bottom:6px}
+  .card .price{font-size:1.6rem;font-weight:900;color:var(--accent);margin:6px 0 2px}
+  .card .price small{font-size:.85rem;color:var(--muted);font-weight:500}
+  .card .lead-time{font-size:.8rem;color:var(--muted);margin-bottom:16px}
+  .card ul{list-style:none;font-size:.9rem;color:var(--text);flex:1}
+  .card li{padding:7px 0 7px 26px;border-bottom:1px dashed var(--line);position:relative}
+  .card li::before{content:"✓";position:absolute;left:2px;color:var(--accent);font-weight:900}
+  .maintenance{margin-top:32px;background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:22px 28px;text-align:center;font-size:.92rem}
+  .maintenance b{color:var(--navy)}
+
+  /* reasons */
+  .reasons{background:var(--bg-soft)}
+  .r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px}
+  .r-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px 26px}
+  .r-item .num{font-size:.78rem;font-weight:900;color:var(--accent);letter-spacing:.15em}
+  .r-item h3{color:var(--navy);font-size:1.05rem;font-weight:700;margin:6px 0 10px}
+  .r-item p{font-size:.9rem;color:var(--muted)}
+
+  /* flow */
+  .flow{counter-reset:step}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+  .step{border:1px solid var(--line);border-radius:12px;padding:24px 20px;background:#fff;position:relative}
+  .step::before{counter-increment:step;content:"0" counter(step);font-weight:900;color:var(--accent);font-size:1.3rem;display:block;margin-bottom:6px}
+  .step h3{font-size:.98rem;color:var(--navy);font-weight:700;margin-bottom:6px}
+  .step p{font-size:.83rem;color:var(--muted)}
+
+  /* faq */
+  .faq-list{max-width:760px;margin:0 auto}
+  details{border:1px solid var(--line);border-radius:10px;margin-bottom:12px;background:#fff}
+  summary{cursor:pointer;padding:16px 20px;font-weight:700;color:var(--navy);font-size:.95rem;list-style:none}
+  summary::before{content:"Q. ";color:var(--accent)}
+  details p{padding:0 20px 16px;font-size:.9rem;color:var(--muted)}
+
+  /* company */
+  .company table{width:100%;max-width:640px;margin:0 auto;border-collapse:collapse;font-size:.92rem}
+  .company th,.company td{padding:14px 16px;border-bottom:1px solid var(--line);text-align:left}
+  .company th{color:var(--navy);width:34%;font-weight:700;white-space:nowrap}
+
+  /* contact */
+  .contact{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;text-align:center}
+  .contact h2{color:#fff}
+  .contact .sub{color:#a8bcd4}
+  .contact p.body{max-width:560px;margin:0 auto 32px;color:#c4d3e6;font-size:.95rem}
+
+  footer{background:var(--navy);color:#8fa3ba;text-align:center;font-size:.8rem;padding:24px 0;border-top:1px solid rgba(255,255,255,.08)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="logo">ITS<span>.</span>LLC</div>
+    <nav><ul>
+      <li><a href="#services">サービス・料金</a></li>
+      <li><a href="#reasons">選ばれる理由</a></li>
+      <li><a href="#flow">制作の流れ</a></li>
+      <li><a href="#company">会社概要</a></li>
+    </ul></nav>
+    <a class="nav-cta" href="#contact">無料相談</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="badge">AI-POWERED WEB DEVELOPMENT</span>
+    <h1>AI開発だから実現できる、<br><em>速くて、安くて、高品質</em>なホームページ。</h1>
+    <p>ITS合同会社は、最新のAI開発体制で制作コストを大幅に圧縮。1ページのサイトなら3万円台から、最短3営業日で公開できます。小さな業務システムやAIチャットボットの開発もお任せください。</p>
+    <a class="hero-cta" href="#contact">まずは無料で相談する</a>
+    <div class="hero-note">お見積り・ご相談は無料です。営業のみのご連絡はいたしません。</div>
+  </div>
+</div>
+
+<div class="strip">
+  <div class="wrap">
+    <div class="chip"><b>¥30,000〜</b><small>1ページサイト</small></div>
+    <div class="chip"><b>最短3日</b><small>スピード納品</small></div>
+    <div class="chip"><b>スマホ対応</b><small>全プラン標準</small></div>
+    <div class="chip"><b>法人契約OK</b><small>請求書払い対応</small></div>
+  </div>
+</div>
+
+<section id="services">
+  <div class="wrap">
+    <h2>サービス・料金</h2>
+    <p class="sub">必要なものだけを、わかりやすい価格で。</p>
+    <div class="cards">
+      <div class="card">
+        <h3>シンプルプラン</h3>
+        <div class="price">¥30,000<small>〜（税込）</small></div>
+        <div class="lead-time">納期：3〜5営業日</div>
+        <ul>
+          <li>1ページ完結のホームページ／LP</li>
+          <li>スマホ・PC対応（レスポンシブ）</li>
+          <li>お問い合わせフォーム設置</li>
+          <li>独自ドメイン・公開設定サポート</li>
+          <li>修正2回まで無料</li>
+        </ul>
+      </div>
+      <div class="card featured">
+        <h3>コーポレートプラン</h3>
+        <div class="price">¥100,000<small>〜（税込）</small></div>
+        <div class="lead-time">納期：2〜3週間</div>
+        <ul>
+          <li>5ページ前後の本格的な会社サイト</li>
+          <li>トップ／サービス／会社概要／お問い合わせ 等</li>
+          <li>基本的なSEO設定</li>
+          <li>Googleマップ・SNS連携</li>
+          <li>修正2回まで無料</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>システム開発プラン</h3>
+        <div class="price">¥150,000<small>〜（要お見積り）</small></div>
+        <div class="lead-time">納期：内容によりご相談</div>
+        <ul>
+          <li>予約・問い合わせ管理などの業務ツール</li>
+          <li>AIチャットボット（FAQ自動応答）</li>
+          <li>スプレッドシート業務の自動化</li>
+          <li>社内資料の検索AI（ナレッジ検索）</li>
+          <li>小さく作って試せる「PoCプラン」あり</li>
+        </ul>
+      </div>
+    </div>
+    <div class="maintenance">
+      <b>保守・更新プラン：月額 ¥5,000〜</b>　テキスト・画像の差し替え、表示の監視、月1回の更新枠。作って終わりにしません。
+    </div>
+  </div>
+</section>
+
+<section id="reasons" class="reasons">
+  <div class="wrap">
+    <h2>選ばれる理由</h2>
+    <p class="sub">「安いだけ」ではありません。</p>
+    <div class="r-grid">
+      <div class="r-item">
+        <span class="num">REASON 01</span>
+        <h3>AI開発で、相場の半額以下を実現</h3>
+        <p>最新のAI開発ツールを本業で使いこなすエンジニアが制作します。人手の作業を大幅に減らせるため、品質を落とさずに低価格・短納期を実現できます。</p>
+      </div>
+      <div class="r-item">
+        <span class="num">REASON 02</span>
+        <h3>現役エンジニアの法人が直接対応</h3>
+        <p>営業担当や外注を挟まず、通信・システム事業に携わる代表エンジニアが直接ヒアリングから納品まで担当。話が速く、技術的な相談にもその場で答えられます。</p>
+      </div>
+      <div class="r-item">
+        <span class="num">REASON 03</span>
+        <h3>ホームページの先まで提案できる</h3>
+        <p>予約管理・問い合わせ自動化・AIチャットボットなど、サイト公開後の「業務のデジタル化」まで一気通貫で対応。困りごとに合わせて最適な形をご提案します。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="flow" class="flow">
+  <div class="wrap">
+    <h2>制作の流れ</h2>
+    <p class="sub">ご相談から公開まで、最短3営業日。</p>
+    <div class="steps">
+      <div class="step"><h3>無料相談</h3><p>メールでお気軽にご連絡ください。24時間以内にご返信します。</p></div>
+      <div class="step"><h3>ヒアリング</h3><p>10分で書けるヒアリングシートで、目的とイメージを共有します。</p></div>
+      <div class="step"><h3>お見積り・ご発注</h3><p>作業範囲を書面で明確にしてからご契約。追加費用の心配がありません。</p></div>
+      <div class="step"><h3>制作・確認</h3><p>デザイン案をご確認いただき、修正は2回まで無料で対応します。</p></div>
+      <div class="step"><h3>公開・納品</h3><p>公開設定までサポート。ご希望に応じて保守プランで運用も支援します。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" style="background:var(--bg-soft)">
+  <div class="wrap">
+    <h2>よくあるご質問</h2>
+    <p class="sub"></p>
+    <div class="faq-list">
+      <details><summary>パソコンに詳しくなくても大丈夫ですか？</summary><p>はい。専門用語を使わずにご説明し、ドメイン取得や公開設定もサポートします。パスワード等の大切な情報はお客様ご自身に入力いただく安全な進め方です。</p></details>
+      <details><summary>文章や写真がまだ用意できていません。</summary><p>文章はAIを活用した下書き支援が可能です。写真は無料素材のご提案もできますので、まずはご相談ください。</p></details>
+      <details><summary>本当に3万円で作れますか？追加費用は？</summary><p>1ページ構成であれば可能です。作業範囲をお見積り時に書面で明確にするため、合意なく追加費用が発生することはありません。</p></details>
+      <details><summary>公開後の修正はお願いできますか？</summary><p>月額¥5,000〜の保守プランで、文言や画像の差し替え・更新を継続的に承ります。スポットでのご依頼も可能です。</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="company" class="company">
+  <div class="wrap">
+    <h2>会社概要</h2>
+    <p class="sub"></p>
+    <table>
+      <tr><th>会社名</th><td>ITS合同会社</td></tr>
+      <tr><th>代表</th><td>高橋 賢弥</td></tr>
+      <tr><th>設立</th><td>2024年7月</td></tr>
+      <tr><th>事業内容</th><td>ホームページ制作／システム・アプリ開発／AI導入支援／ITエンジニアリングサービス</td></tr>
+      <tr><th>連絡先</th><td><a href="mailto:k.takahashi.7755@gmail.com" style="color:var(--accent)">k.takahashi.7755@gmail.com</a></td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="contact" class="contact">
+  <div class="wrap">
+    <h2>無料相談・お見積り</h2>
+    <p class="sub">CONTACT</p>
+    <p class="body">「こんなことはできる？」という段階のご相談も歓迎です。内容を拝見し、24時間以内にご返信します。お見積りは無料、しつこい営業は一切いたしません。</p>
+    <a class="hero-cta" href="mailto:k.takahashi.7755@gmail.com?subject=%E3%83%9B%E3%83%BC%E3%83%A0%E3%83%9A%E3%83%BC%E3%82%B8%E5%88%B6%E4%BD%9C%E3%81%AE%E7%9B%B8%E8%AB%87">メールで相談する</a>
+  </div>
+</section>
+
+<footer>© 2026 ITS LLC. All rights reserved.</footer>
+
+</body>
+</html>
