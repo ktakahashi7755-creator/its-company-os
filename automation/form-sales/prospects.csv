@@ -1,1 +1,47 @@
-社名,URL,業種
+社名,URL,業種,備考(検索出典・気づき)
+まきのはらＦＰ・税理士事務所,http://makinoharakaikei.com/,税理士,http・SSLなしの可能性・小規模法人向け記帳代行（検索:税理士事務所 松戸市）
+勝柴税理士事務所,http://www.katsushiba.jp/,税理士,http・SSLなしの可能性（検索:税理士事務所 松戸市）
+丹治行政書士事務所,http://2525nikoniko.com/,行政書士,http・SSLなしの可能性・ドメイン名が古風（検索:行政書士事務所 府中市）
+柴野行政書士・社労士事務所,http://www.soudan1.jp/,行政書士・社労士,http・SSLなしの可能性（検索:行政書士事務所 府中市）
+社会保険労務士笠置進一事務所,http://kasagisr.com/,社労士,http・SSLなしの可能性・個人事務所（検索:社労士事務所 八王子市）
+司法書士法人 小保内事務所,http://www.obonai-office.jp/,司法書士,http・SSLなしの可能性（検索:司法書士事務所 横須賀市）
+いくとも鍼灸院,http://www.ikutomo.jp/,鍼灸院,http・SSLなしの可能性・本八幡の個人院（検索:鍼灸院 市川市）
+さわやか整体院,http://sawayaka-seitai.info/,整体院,http・SSLなしの可能性・西国立の個人院（検索:整体院 立川市）
+愛宕町ゆもと整骨院,http://ys-seikotsu.in/,整骨院,http・SSLなしの可能性・越谷市蒲生の個人院（検索:整骨院 越谷市）
+株式会社空間工房,http://kukankoubou.co.jp/,工務店・リフォーム,http・SSLなしの可能性・市原/木更津・1999年創業の小規模（検索:工務店 市原市）
+ゴトウ鍼灸院,https://goto-jyunkan.webnode.jp/,鍼灸院,無料HPサービス(webnode)製・リニューアル提案の余地大（検索:鍼灸院 草加市）
+草加べんてん接骨院 鍼灸院,https://sbs.crayonsite.net/,接骨院・鍼灸院,無料HPサービス(クレヨン)製・個人院（検索:鍼灸院 草加市）
+はり・きゅう どんぐり治療院,https://donguri5.main.jp/,鍼灸治療院,共用レンタルサーバのドメイン(main.jp)・市川大野の小規模院（検索:鍼灸院 市川市）
+坂本幸一税理士事務所・坂本幸一行政書士事務所,https://office-sakamoto.biz/,税理士・行政書士,独自ドメイン・個人事務所（検索:税理士事務所 川口市）
+及川愛税理士事務所,https://mana-oikawa-taxac.com/,税理士,女性税理士の個人事務所（検索:税理士事務所 川口市）
+和田博税理士事務所,https://www.wadakaikei.jp/,税理士,旧鳩ヶ谷市にも言及あり・古めの可能性（検索:税理士事務所 川口市）
+宮﨑俊一郎税理士事務所,https://miyazakizeirishi.com/,税理士,個人事務所（検索:税理士事務所 川口市）
+あいきょう行政書士事務所,https://aikyo-gyosei.jp/,行政書士,東船橋駅前・個人事務所（検索:行政書士事務所 船橋市）
+行政書士早瀬じゅん子事務所,https://jhayaseoffice.com/,行政書士,個人事務所（検索:行政書士事務所 船橋市）
+窪田史穂行政書士事務所,https://shiho-kubota-office.com/,行政書士,女性行政書士の個人事務所（検索:行政書士事務所 船橋市）
+行政書士豊浦事務所,https://www.toyoura-office.com/,行政書士,終活・相続・許認可（検索:行政書士事務所 船橋市）
+長澤労法管理事務所,https://ngswsr.com/,社労士,八王子の個人事務所（検索:社労士事務所 八王子市）
+山下和男司法書士事務所,https://www.yamashita-shihou.com/,司法書士,横須賀中央駅徒歩7分・個人事務所（検索:司法書士事務所 横須賀市）
+有限会社三幸住宅,https://www.sanko-jutaku.com/,工務店,和風住宅・木の家の小規模工務店・サイト構成が古い可能性（検索:工務店 川越市）
+ICHIHARA WORKS,https://ichiharaworks.co.jp/,リフォーム,市原市の安心価格リフォーム店（検索:リフォーム 市原市）
+有限会社相馬工業,https://www.souma-kougyou.com/,塗装店,創業49年・平塚/茅ヶ崎の住宅塗替え専門（検索:塗装店 平塚市）
+有限会社 ヤスダ塗装,https://www.yasudatosou.co.jp/,塗装店,昭和21年創業の老舗塗装・看板店・サイト刷新提案の余地（検索:塗装店 平塚市）
+有限会社長田美装工業,https://www.osadabisou.com/,塗装店,平塚市四之宮の外壁塗装・小規模有限会社（検索:塗装店 平塚市）
+株式会社相原塗装店,https://www.aihara-tosou.com/,塗装店,平塚市の外壁・屋根塗装の地場専門店（検索:塗装店 平塚市）
+セイケン,https://www.seiken-tosou.com/,塗装店,平塚市の職人系小規模店（検索:塗装店 平塚市）
+有限会社片桐造園,https://katagiri-zouen.jp/,造園業,越谷市花田の造園・植栽・伐採・外構（検索:造園業 越谷市）
+株式会社 深野造園,https://www.fukano-zouen.jp/,造園業,庭木剪定・老木補修・大木移植が専門の職人系（検索:造園業 越谷市）
+有限会社クリーンガーデン緑屋,https://www.cg-midoriya-koshigaya.com/,造園業,剪定・伐採・除草・自作サイトの可能性（検索:造園業 越谷市）
+庭守の花玄,https://www.niwamori-hanagen.com/,造園業,越谷市の個人経営風の植木屋（検索:造園業 越谷市）
+株式会社小晴,https://koharu-niwa.com/,造園業,「越谷の庭師 小晴」・個人事務所規模（検索:造園業 越谷市）
+有限会社押切工務店,https://www.e-daiku3.com/,工務店,1970年創業・紹介中心の地域密着工務店・ドメイン名と社名が不一致（検索:工務店 町田市）
+株式会社 鈴木工務店,https://www.suzuki-koumuten.co.jp/,工務店,町田市の木の家づくり地場工務店（検索:工務店 町田市）
+所沢駅前整骨院,https://tokorozawa-seikotsuin.com/,整骨院,独自ドメイン・駅前個人院（検索:整骨院 所沢市）
+菜のはな整骨院,https://nanohana-seikotsuin.com/,整骨院,西所沢・股関節痛や膝痛特化の個人院（検索:整骨院 所沢市）
+さくら鍼灸整骨院,https://www.sakura-shinkyu.com/,鍼灸整骨院,所沢市の鍼灸併設整骨院（検索:整骨院 所沢市）
+くりばやし整骨院,https://www.kuribayashi-seikotsuin.com/,整骨院,藤沢市の個人整骨院（検索:整体院 藤沢市）
+ふじさわ整体院,https://fujisawaseitai.com/,整体院,藤沢駅徒歩3分の個人整体院（検索:整体院 藤沢市）
+湘南藤沢整骨院,https://www.shofujiseikotsu.com/,整骨院,湘南台駅2分・サイトのつくりが古め（検索:整体院 藤沢市）
+おおの鍼灸整骨院,https://oono-seikotsuin.com/,鍼灸整骨院,市川大野駅徒歩1分の個人院（検索:鍼灸院 市川市）
+あい接骨院・整体院,https://ai-seikotu-sagamihara.com/,接骨院・整体院,夫婦経営の小規模院（検索:整骨院 相模原市）
+かさい整骨院,https://www.kasai-seikotu.com/,整骨院,臨床30年以上の院長による個人院（検索:整骨院 相模原市）
