@@ -41,6 +41,7 @@ automation/ses-matching/
 ├── README.md                 ← この手順書
 ├── sources.md                ← 配信ソース設定＋取り込みルール（REOorGA・5日鮮度）
 ├── scoring.md                ← 面談通過可能性の共通採点ルーブリック
+├── notion-review.md          ← 代表レビュー面（Notion DB設計・ビュー・運用フロー）
 ├── 案件_YYYYMMDD_〇〇.md       ← 案件ごとの定義＋必須スキル（例：遊技機NWSec）
 ├── inbox-案件.example.md      ← 案件配信を貼る雛形（inbox-案件.md にコピー）
 ├── inbox-要員.example.md      ← 人材配信/自社プールを貼る雛形（inbox-要員.md にコピー）
@@ -55,8 +56,9 @@ automation/ses-matching/
    - 配信**5日以内**の案件だけを対象化（超過は除外理由に明記）
    - 案件×要員を `scoring.md` で採点し**面談通過可能性**を判定
    - `digests/digest-YYYYMMDD.md` に集約＋**sales@からの提案下書き**を生成
-3. 代表は**ダイジェスト1ファイル**を目視。本命に✓、見送りは理由を一言（採点の学習材料）。
-4. ✓の案件×要員は、下書きを最終確認し、**sales@ から配信元へ個別に手動送信**。
+3. 代表は**Notion「SES提案レビュー」の要確認ビュー**（またはダイジェスト1ファイル）を目視。
+   本命に✓、見送りは理由を一言（採点の学習材料）。→ Notion設計は `notion-review.md`。
+4. ✓の案件×要員は、下書きを最終確認し、**ITSセールスから配信元へ個別に手動送信**。
 5. 結果（面談/見送り）を `../../data/pipeline.md` に反映。
 
 ## 完全自動化への拡張（接続後）
