@@ -9,8 +9,11 @@ Claude APIで面談通過可能性を採点 → ダイジェスト生成(digests
 automation/ses-matching/ の各mdに従い、プロンプトにも埋め込む。
 
 環境変数:
-  ANTHROPIC_API_KEY     採点に必須（--dry-run 時は不要）
+  OPENAI_API_KEY        採点に使用（あればOpenAIを自動採用。--dry-run 時は不要）
+  OPENAI_MODEL          任意（既定 gpt-4o-mini・安価）
+  ANTHROPIC_API_KEY     OpenAIを使わない場合の採点キー（どちらか一方でよい）
   ANTHROPIC_MODEL       任意（既定 claude-sonnet-4-6）
+  LLM_PROVIDER          任意（openai / anthropic を明示指定。未指定は自動判定）
   IMAP_HOST             受信サーバ（例 imap.reorga.co.jp 等）※--source imap 時に必須
   IMAP_PORT             既定 993（SSL）
   IMAP_USER             既定 contact@reorga.co.jp（受信専用）
@@ -42,7 +45,10 @@ from email.header import decode_header
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
-MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+# LLMプロバイダ：OPENAI_API_KEY があれば openai、無ければ anthropic を既定に。LLM_PROVIDER で明示指定可。
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER") or ("openai" if os.environ.get("OPENAI_API_KEY") else "anthropic")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")          # 安価。必要なら gpt-4o 等に
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 SALES_FROM = os.environ.get("SALES_FROM", "sales@its-tokyo.com")
 REOORGA_ADDR = os.environ.get("IMAP_USER", "contact@reorga.co.jp")
 FRESH_DAYS = int(os.environ.get("FRESH_DAYS", "5"))
@@ -241,12 +247,35 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 "note":"全体所見"}}"""
 
 
-def score_with_claude(kept, dropped, base_date):
+def _call_llm(system, user):
+    """OpenAI / Anthropic のどちらかで応答テキストを返す。"""
+    if LLM_PROVIDER == "openai":
+        from openai import OpenAI
+
+        if not os.environ.get("OPENAI_API_KEY"):
+            sys.exit("OPENAI_API_KEY が未設定です（--dry-run なら不要）。")
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        resp = client.chat.completions.create(
+            model=OPENAI_MODEL, max_tokens=4000,
+            response_format={"type": "json_object"},
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}],
+        )
+        return resp.choices[0].message.content or ""
+    # anthropic
     import anthropic
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        sys.exit("ANTHROPIC_API_KEY が未設定です（--dry-run なら不要）。")
+        sys.exit("ANTHROPIC_API_KEY（または OPENAI_API_KEY）が未設定です（--dry-run なら不要）。")
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    resp = client.messages.create(
+        model=ANTHROPIC_MODEL, max_tokens=4000, system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+
+
+def score_with_llm(kept, dropped, base_date):
     specs = load_specs()
     cases = load_case_defs()
     feed = "\n\n".join(
@@ -262,11 +291,7 @@ def score_with_claude(kept, dropped, base_date):
         f"# プレフィルタ済みの配信（段階①通過。除外理由の内訳: {dropped_note}）\n{feed}\n\n"
         f"上記を案件×要員で採点し、指定JSONのみ返してください。"
     )
-    resp = client.messages.create(
-        model=MODEL, max_tokens=4000, system=system,
-        messages=[{"role": "user", "content": user}],
-    )
-    text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    text = _call_llm(system, user).strip()
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
         return {"candidates": [], "excluded": [], "note": "採点結果の解析に失敗", "raw": text}
@@ -382,7 +407,8 @@ def main():
             print(f"       通過: [{k.get('date') or '日付?'}] {k['body'][:50].replace(chr(10),' ')}")
         return
 
-    result = score_with_claude(kept, dropped, base_date)
+    print(f"[info] LLMプロバイダ: {LLM_PROVIDER}（model: {OPENAI_MODEL if LLM_PROVIDER=='openai' else ANTHROPIC_MODEL}）")
+    result = score_with_llm(kept, dropped, base_date)
     digest = render_digest(result, base_date, kept, dropped)
     path = write_digest(digest, base_date)
     print("=" * 60)

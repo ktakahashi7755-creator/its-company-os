@@ -74,8 +74,8 @@ automation/ses-matching/
 ## 自動化の実行（実装済み）
 
 `run_ses_matching.py` が **IMAP受信（読むだけ）→ 段階①プレフィルタ（鮮度5日＋必須語）→
-段階②Claude採点（`scoring.md`）→ ダイジェスト生成（digests/）→ 任意でNotion投稿** を行う。
-**メールの自動送信はしない**（下書きまで）。
+段階②AI採点（OpenAI/Claude・`scoring.md`）→ ダイジェスト生成（digests/）→ 任意でNotion投稿** を行う。
+**メールの自動送信はしない**（下書きまで）。採点キーは OpenAI か Anthropic のどちらか一方でよい。
 
 ```bash
 # 認証情報なしで配線確認（サンプル入力・APIキー不要）
@@ -94,12 +94,15 @@ digestは成果物(artifact)＋Notionへ。**リポジトリにはコミット�
 
 | 種別 | キー | 用途 |
 |---|---|---|
-| Secret | `ANTHROPIC_API_KEY` | 採点（Claude API） |
-| Secret | `IMAP_HOST` / `IMAP_USER` / `IMAP_PASSWORD` | 受信（contact@reorga.co.jp を読む） |
+| Secret | `OPENAI_API_KEY` | 採点（**OpenAI・既定・あれば自動採用**） |
+| Secret | `ANTHROPIC_API_KEY` | 採点（OpenAIを使わない場合のみ。どちらか一方） |
+| Variable | `OPENAI_MODEL`(gpt-4o-mini) / `LLM_PROVIDER` | 任意（モデル・プロバイダ明示） |
+| Secret | `IMAP_HOST` / `IMAP_PASSWORD` | 受信（`IMAP_USER` は既定 contact@reorga.co.jp） |
 | Variable | `IMAP_PORT`(993) / `IMAP_FOLDER` / `FRESH_DAYS`(5) / `SALES_FROM` | 任意設定 |
 | Secret | `NOTION_TOKEN` / `NOTION_DB_ID` | レビューDBへ行追加（任意） |
 
-> `IMAP_PASSWORD` は必ず Secrets。コード・チャット・mdに書かない。
+> 採点キーは **OpenAI か Anthropic のどちらか一方**でよい（`OPENAI_API_KEY` があればOpenAIを既定採用）。
+> `IMAP_PASSWORD` / APIキーは必ず Secrets。コード・チャット・mdに書かない。
 
 ## さらなる拡張
 
