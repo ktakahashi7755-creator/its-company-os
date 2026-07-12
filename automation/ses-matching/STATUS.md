@@ -31,6 +31,19 @@
 
 ---
 
+## ✅ 済（2026-07-13）：ハードニング（レビュー2巡）＋バックアップ
+
+- **コードレビュー2巡**で実バグ12件を修正（score型クラッシュ・受信IMAP無限ハング・
+  ガードレールのドメイン検出漏れ・採点バッチ例外の巻き添え・重複排除・違反下書きの保存 等）。
+  詳細はコミット履歴（PR #27/#28）と `eval/run_eval.py` の `robustness` ステージ。
+- **接続リトライ**：sales@ IMAP を指数バックオフで最大3回試行（Xserverの間欠タイムアウト対策）。
+  `SALES_IMAP_TIMEOUT`(30) / `SALES_IMAP_RETRIES`(3) で調整可。
+- **eval 8ステージ全緑**：prefilter/draft/finalize/drafts/notion/contact/dedup/robustness。
+  毎朝の eval gate で自動回帰チェック。
+- **バックアップ（復元ポイント）**：リモートブランチ `backup/ses-matching-v1.0`（この安定版を指す）。
+  戻し方：`git fetch origin && git checkout -B <作業ブランチ> origin/backup/ses-matching-v1.0`
+  → そのままデフォルトへPR/マージすれば安定版に復帰。※タグはこの環境ではpush不可のためブランチで代替。
+
 ## ✅ 済（2026-07-12 追加）：Notionを簡潔化（縦に広げない）
 
 - Notion候補ページは **要約＋マッチ度（スコア/7軸内訳）＋スキルシート要約＋ファイル名** のみ表示。
