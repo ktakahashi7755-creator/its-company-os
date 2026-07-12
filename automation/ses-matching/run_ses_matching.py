@@ -436,6 +436,7 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 {{"candidates":[{{"src":0,"kind":"要員|案件","case":"案件名","engineer":"イニシャル","score":0,"likelihood":"高|中",
 "breakdown":{{"必須":0,"鮮度":0,"単価":0,"商流":0,"タイミング":0,"見せ方":0,"継続":0}},
 "tier":"①/②等","company":"配信元会社","person":"担当者名","to":"担当アドレス or 要・宛先確認",
+"age":"配信/スキルシートから読み取れる年齢（例 45歳・50代 等）。不明なら 不明",
 "summary":"要員/案件サマリー","reason":"通過根拠","concern":"懸念とフォロー","flags":["年齢上限超・代表確認 等"]}}],
 "excluded":[{{"item":"対象","reason":"除外理由"}}],
 "note":"全体所見"}}
@@ -775,25 +776,7 @@ def build_draft_message(cand):
     msg["Subject"] = p["subject"]
     msg["X-ITS-Key"] = _its_key(cand.get("case"), cand.get("engineer"))  # 重複判定用（下書き検索キー）
     msg.set_content(prefix + p["body"])
-    # スキルシート原本(Excel/PDF)を下書きに添付（代表は下書きを開いて中身を確認→そのまま送信）
-    for fname, payload in cand.get("_ss_files", []) or []:
-        if not payload:
-            continue
-        low = (fname or "").lower()
-        if low.endswith(".pdf"):
-            maintype, subtype = "application", "pdf"
-        elif low.endswith(".xlsx"):
-            maintype, subtype = ("application",
-                                 "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        elif low.endswith(".xls"):
-            maintype, subtype = "application", "vnd.ms-excel"
-        else:
-            maintype, subtype = "application", "octet-stream"
-        try:
-            msg.add_attachment(payload, maintype=maintype, subtype=subtype,
-                               filename=(fname or "skillsheet"))
-        except Exception:  # noqa  添付失敗は下書き本体を止めない
-            pass
+    # ※スキルシートは下書きに添付しない（Notion側で閲覧する運用）。
     return msg, []
 
 
@@ -1036,8 +1019,50 @@ def _nt_block(kind, txt):
             kind: {"rich_text": [{"type": "text", "text": {"content": (txt or "")[:1900]}}]}}
 
 
-def _notion_blocks_from_result(result):
-    """**要約・マッチ度・スキルシート要約だけ**の簡潔ブロックを作る（返信本文は載せない＝縦に広げない）。
+def notion_upload_file(token, fname, payload):
+    """Notionにファイルをアップロードし file_upload id を返す（best-effort・失敗時 None）。
+    スキルシート原本(Excel/PDF)をNotion候補ページに添付＝Notion上で開けるようにするため。"""
+    import mimetypes
+    import uuid
+    ctype = mimetypes.guess_type(fname or "")[0] or "application/octet-stream"
+    h = {"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28",
+         "Content-Type": "application/json"}
+    body = json.dumps({"filename": fname or "skillsheet", "content_type": ctype}).encode("utf-8")
+    try:
+        req = urllib.request.Request("https://api.notion.com/v1/file_uploads",
+                                     data=body, headers=h, method="POST")
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        print(f"[notion] file_upload作成エラー {e.code}: {e.read().decode('utf-8','ignore')[:200]}")
+        return None
+    except Exception as e:  # noqa
+        print(f"[notion] file_upload作成エラー: {e}")
+        return None
+    up_id, up_url = resp.get("id"), resp.get("upload_url")
+    if not (up_id and up_url):
+        return None
+    boundary = "----ITS" + uuid.uuid4().hex
+    pre = (f"--{boundary}\r\n"
+           f'Content-Disposition: form-data; name="file"; filename="{fname}"\r\n'
+           f"Content-Type: {ctype}\r\n\r\n").encode("utf-8")
+    data = pre + payload + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    h2 = {"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28",
+          "Content-Type": f"multipart/form-data; boundary={boundary}"}
+    try:
+        req2 = urllib.request.Request(up_url, data=data, headers=h2, method="POST")
+        urllib.request.urlopen(req2, timeout=60)
+        return up_id
+    except urllib.error.HTTPError as e:
+        print(f"[notion] fileアップロードエラー {e.code}: {e.read().decode('utf-8','ignore')[:200]}")
+        return None
+    except Exception as e:  # noqa
+        print(f"[notion] fileアップロードエラー: {e}")
+        return None
+
+
+def _notion_blocks_from_result(result, token=None):
+    """**要約・マッチ度・年齢・スキルシートだけ**の簡潔ブロックを作る（返信本文は載せない＝縦に広げない）。
+    token があればスキルシート原本(Excel/PDF)をNotionにアップロードし、file ブロックで開けるようにする。
     返信全文は sales@ の下書きに入る。Notionは『見て判断する』面に絞る。"""
     blocks = []
     cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0), reverse=True)
@@ -1050,15 +1075,25 @@ def _notion_blocks_from_result(result):
             f"{c.get('engineer','?')} × {c.get('case','?')}　{c.get('score','?')}/100・{c.get('likelihood','?')}{flag}"))
         blocks.append(_nt_block(
             "bulleted_list_item",
-            f"枠 {c.get('tier','-')}｜配信元 {c.get('company','?')} {c.get('person','')}｜To {c.get('to','要・宛先確認')}"))
+            f"年齢 {c.get('age','不明')}｜枠 {c.get('tier','-')}｜配信元 {c.get('company','?')} {c.get('person','')}｜To {c.get('to','要・宛先確認')}"))
         blocks.append(_nt_block("bulleted_list_item", f"マッチ内訳 {_fmt_breakdown(c)}"))
         if c.get("summary"):
             blocks.append(_nt_block("bulleted_list_item", f"サマリー {c['summary']}"))
         if c.get("skillsheet_summary"):
             files = "／".join(c.get("skillsheet_files", [])) or "添付"
-            blocks.append(_nt_block("bulleted_list_item", f"📎 スキルシート（{files}） {c['skillsheet_summary']}"))
+            blocks.append(_nt_block("bulleted_list_item", f"📎 スキルシート要約（{files}） {c['skillsheet_summary']}"))
         elif c.get("skillsheet_note"):
             blocks.append(_nt_block("bulleted_list_item", f"📎 {c['skillsheet_note']}"))
+        # スキルシート原本をNotionに添付（Notion上で開ける）
+        if token:
+            for fname, payload in c.get("_ss_files", []) or []:
+                if not payload:
+                    continue
+                up_id = notion_upload_file(token, fname, payload)
+                if up_id:
+                    blocks.append({"object": "block", "type": "file",
+                                   "file": {"type": "file_upload", "file_upload": {"id": up_id},
+                                            "name": (fname or "skillsheet")[:100]}})
         blocks.append(_nt_block("bulleted_list_item", "返信下書き → sales@ の下書きフォルダに保存済み（開いて送信）"))
         blocks.append({"object": "block", "type": "divider", "divider": {}})
     excluded = result.get("excluded", [])
@@ -1078,7 +1113,7 @@ def post_notion_page(result, base_date):
         return
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
                "Notion-Version": "2022-06-28"}
-    children = _notion_blocks_from_result(result) or [
+    children = _notion_blocks_from_result(result, token=token) or [
         {"object": "block", "type": "paragraph", "paragraph": {"rich_text": []}}]
     payload = {
         "parent": {"page_id": parent},
