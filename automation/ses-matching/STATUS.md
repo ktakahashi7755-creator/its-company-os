@@ -34,6 +34,24 @@
 
 ---
 
+## ✅ 追加（2026-07-12）：逆方向マッチング（ITSの要員に案件を当てる）を新設
+
+- 従来（ITS案件×配信要員）の**対の逆方向**＝「**配信案件 × ITSプロパー要員（KN）**」の提案下書きを作る仕組みを追加。
+  既存の `run_ses_matching.py`（71KB・eval gate緑）は**一切変更せず**、その安全網関数（`validate_draft`/
+  `extract_contact`/`load_signature`/ dedupe 等）を**import して再利用**。→ プレフィルタeval緑を維持。
+- 追加物：
+  - `要員_KN_PMOサポート.md`……要員KN定義（PMO補佐・PMサポート等／単価48万・応相談／即日〜／大井町／
+    当てにいく案件の型・KN適合語）＋提案本文の MAIL-BLOCK（代表提供の要員サマリー）。
+  - `reply-template-offer.txt`……要員先行テンプレ（`{会社名}{担当者名}{案件名}{要員サマリー}{署名}`／件名 `RE:〔案件件名〕`）。
+  - `make_offer_draft.py`……①`--inbox` で洗い出し（鮮度5日＋KN適合で高/中/低・技術専任フラグ）②単一案件で
+    送信可能な下書き ③`--attach` でスキルシートPDFを添付した `.eml` 書き出し。**送信はしない**。
+  - `offer-on-demand.md`（手順書）／`examples/offer-sample-inbox.md`（動作確認用ダミー）。
+  - KNスキルシート原本 PDF は `../../data/skillsheets/KN_スキルシート.pdf`（**gitignore・個人情報**・提案時に添付）。
+- 動作確認：サンプルinboxで PMO補佐/SaaS導入支援を「高」、NW設計構築を「技術専任・要確認」、5日超過案件を
+  「対象外」に正しく分類。単一案件で From=sales@・RE:件名・署名入り下書き＋PDF添付 .eml を生成（validate_draft緑）。
+- **残（代表の入力待ち）**：実際の洗い出しには**直近5日の案件配信**が要る。`inbox-案件.md` に貼るか、
+  日次IMAP取込（案件を要員KNに当てる側）へ組み込むかは代表判断。詳細は `offer-on-demand.md`。
+
 ## ✅ 済（2026-07-13）：Notion DB反映のハードニング（レビュー2巡目・4件）＋本番検証
 
 - 独立レビュー2巡目の指摘4件を修正（PR #35・`fix(ses): Notion DB反映のレビュー指摘4件`）：

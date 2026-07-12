@@ -82,6 +82,27 @@ automation/ses-matching/
 > 精度は `eval/` の評価ハーネスで数値管理（`python eval/run_eval.py --stage all`）。
 > プレフィルタ誤爆・下書きのガードレール違反・宛先抽出・重複を決定論で回帰チェックする。
 
+## 逆方向：ITSの要員に案件を当てる（要員先行提案）
+
+上記は「**ITSの案件 × 配信で来た要員**」。対の逆方向＝「**配信で来た案件 × ITSのプロパー要員（KN 等）**」は
+`make_offer_draft.py` で行う。手順の正本は **`offer-on-demand.md`**。
+
+```bash
+# ① 洗い出し（鮮度5日＋要員KN適合で案件を並べる）
+python automation/ses-matching/make_offer_draft.py --inbox automation/ses-matching/inbox-案件.md --date 2026-07-12
+# ② 個別の提案下書き（1案件＝1下書き・件名は RE:〔案件件名〕）
+python automation/ses-matching/make_offer_draft.py \
+  --subject "〔案件配信の件名〕" --company "株式会社〇〇" --person "山田" --to "tanto@example.co.jp"
+# ③ スキルシートPDFを添付した送信可能な .eml を書き出す
+python automation/ses-matching/make_offer_draft.py --subject "..." --company "..." --person "..." --to "..." \
+  --attach data/skillsheets/KN_スキルシート.pdf --eml /tmp/KN_offer.eml
+```
+
+- 要員定義：`要員_KN_PMOサポート.md`（提案本文＝MAIL-BLOCK・当てにいく案件の型・KN適合語）。
+- テンプレ：`reply-template-offer.txt`（代表の要員先行テンプレ）。署名・From＝sales@・宛先の保守的抽出・
+  REOorGA混入禁止は**従来と同じ安全網を再利用**。**送信は必ず代表が手動**。
+- スキルシート原本PDFは `data/skillsheets/`（gitignore・個人情報）に置き、**提案時に添付**。
+
 ## 自動化の実行（実装済み）
 
 `run_ses_matching.py` が **IMAP受信（本文の先頭のみ・添付は読まない）→ 段階①プレフィルタ（鮮度5日＋必須語）→
