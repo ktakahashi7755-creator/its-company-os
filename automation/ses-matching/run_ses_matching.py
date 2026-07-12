@@ -401,8 +401,11 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 - 【ITSの要員 × 配信の"案件"】案件は添付が無い前提。《案件概要(本文)》でマッチを判断する。kind="案件"。
 - **添付スキルシートは今は読まない。** 本文サマリー/件名/案件概要"だけ"で判断する（マッチ後に別工程で読む）。
 - 各候補には、根拠にした配信の番号を src（0始まりの整数）で必ず入れる。
-- 必須スキル未充足・情報不足・単価/商流/鮮度で外れるものは candidates に入れず excluded に回す。
-  candidates は面談通過可能性 高/中 のみ（低は除外）。数を稼がず、確度の高いものだけを的確に。
+- excluded に回すのは「**スキル必須未充足・情報不足・単価/商流/鮮度NG**」の場合のみ。
+- **年齢・国籍等の属性だけを理由に excluded にしない。** スキル必須（両刀・設計/構築/運用等）を満たすなら
+  candidate として出し、flags に "年齢上限超・代表確認" 等を入れる（likelihood はスキルで 高/中）。
+  → 貴重な両刀人材は、年齢超でも代表が客に交渉できるよう必ず候補として見せる。
+  candidates は 高/中 のみ（スキルで低いものは除外）。数稼ぎはしない。
 
 採点は scoring.md の100点ルーブリックに従い、面談通過可能性を 高/中/低 で出す。
 出力は必ず次のJSONのみ（前後に文章を付けない）:
@@ -414,8 +417,7 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 "note":"全体所見"}}"""
 
 
-def _call_llm(system, user, json_mode=True):
-    """OpenAI / Anthropic のどちらかで応答テキストを返す。json_mode=False で通常テキスト。"""
+def _llm_once(system, user, json_mode):
     if LLM_PROVIDER == "openai":
         from openai import OpenAI
 
@@ -430,7 +432,6 @@ def _call_llm(system, user, json_mode=True):
             **kwargs,
         )
         return resp.choices[0].message.content or ""
-    # anthropic
     import anthropic
 
     if not _env("ANTHROPIC_API_KEY"):
@@ -443,31 +444,77 @@ def _call_llm(system, user, json_mode=True):
     return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
 
 
-def score_with_llm(kept, dropped, base_date):
-    per_item = int(_env("PER_ITEM_CHARS", "1200"))  # 1通あたりの本文文字数（TPM超過を避ける）
-    specs = load_specs()[:6000]
-    cases = load_case_defs()[:6000]
+def _call_llm(system, user, json_mode=True):
+    """OpenAI / Anthropic のどちらかで応答テキストを返す。レート制限(429)は待機して再試行。"""
+    import time
+
+    for attempt in range(4):
+        try:
+            return _llm_once(system, user, json_mode)
+        except SystemExit:
+            raise
+        except Exception as e:  # noqa
+            name = type(e).__name__.lower()
+            msg = str(e).lower()
+            is_rate = "ratelimit" in name or "429" in msg or "rate limit" in msg or "tokens per min" in msg
+            if is_rate and attempt < 3:
+                wait = 20 * (attempt + 1)
+                print(f"[llm] レート制限。{wait}秒待機して再試行 ({attempt + 1}/3)")
+                time.sleep(wait)
+                continue
+            raise
+
+
+def _score_chunk(chunk, offset, base_date, system, specs, cases):
+    """kept の一部(chunk)を採点。src はグローバル添字(offset+j)。"""
+    per_item = int(_env("PER_ITEM_CHARS", "900"))
     feed = "\n\n".join(
-        f"--- 配信 src={i} (会社:{it.get('from_name') or '?'} <{it.get('from_addr') or '?'}> "
+        f"--- 配信 src={offset + j} (会社:{it.get('from_name') or '?'} <{it.get('from_addr') or '?'}> "
         f"日付:{it.get('date') or '不明'}) ---\n件名:{it.get('subject','')}\n{it['body'][:per_item]}"
-        for i, it in enumerate(kept)
+        for j, it in enumerate(chunk)
     )
-    dropped_note = "、".join(f"{d.get('drop_reason')}" for d in dropped) or "なし"
-    system = SYSTEM_PROMPT.format(sales_from=SALES_FROM, reoorga=REOORGA_ADDR)
     user = (
         f"本日は {base_date.isoformat()}。鮮度は配信{FRESH_DAYS}日以内が対象。\n\n"
         f"# 設計仕様\n{specs}\n\n# 案件定義\n{cases}\n\n"
-        f"# プレフィルタ済みの配信（段階①通過。除外理由の内訳: {dropped_note}）\n{feed}\n\n"
+        f"# プレフィルタ済みの配信（段階①通過）\n{feed}\n\n"
         f"上記を案件×要員で採点し、指定JSONのみ返してください。"
     )
     text = _call_llm(system, user).strip()
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
-        return {"candidates": [], "excluded": [], "note": "採点結果の解析に失敗", "raw": text}
+        return {"candidates": [], "excluded": [], "note": "解析失敗", "raw": text}
     try:
         return json.loads(m.group(0))
     except json.JSONDecodeError:
         return {"candidates": [], "excluded": [], "note": "JSON解析エラー", "raw": text}
+
+
+def score_with_llm(kept, dropped, base_date):
+    """全プレフィルタ通過分をバッチ分割して採点（TPM超過はリトライで吸収）。"""
+    import time
+
+    specs = load_specs()[:6000]
+    cases = load_case_defs()[:6000]
+    system = SYSTEM_PROMPT.format(sales_from=SALES_FROM, reoorga=REOORGA_ADDR)
+    chunk_size = int(_env("SCORE_CHUNK", "20"))
+    cands, excl, notes, raw = [], [], [], None
+    n_chunks = (len(kept) + chunk_size - 1) // chunk_size
+    for ci, start in enumerate(range(0, len(kept), chunk_size)):
+        part = kept[start:start + chunk_size]
+        print(f"[score] バッチ {ci + 1}/{n_chunks}（{len(part)}件）を採点中…")
+        r = _score_chunk(part, start, base_date, system, specs, cases)
+        cands += r.get("candidates", []) or []
+        excl += r.get("excluded", []) or []
+        if r.get("note"):
+            notes.append(r["note"])
+        if r.get("raw") and raw is None:
+            raw = r["raw"]
+        if ci < n_chunks - 1:
+            time.sleep(3)  # バッチ間で軽く間隔（レート制限緩和）
+    out = {"candidates": cands, "excluded": excl, "note": " / ".join(notes[:5])}
+    if not cands and raw:
+        out["raw"] = raw
+    return out
 
 
 # ---------- 出力 ----------
@@ -585,8 +632,9 @@ def main():
     print(f"[info] 取り込み {len(items)} 件 → 段階①通過 {len(kept)} / 除外 {len(dropped)}"
           + (f"（内訳: {reasons}）" if reasons else ""))
 
-    # 段階②に渡すのは新しい順に上限まで（プロンプト肥大とコストを抑え、高マッチを的確に）
-    stage2_max = int(_env("STAGE2_MAX", "40"))
+    # 段階②に渡す上限（新しい順）。両刀プレフィルタ後は件数が絞れているので広めに。
+    # バッチ分割＋レート制限リトライで、この件数を全員採点する。
+    stage2_max = int(_env("STAGE2_MAX", "300"))
     kept.sort(key=lambda x: (x.get("date") or ""), reverse=True)
     if len(kept) > stage2_max:
         print(f"[info] 段階②採点は新しい順 {stage2_max} 件に限定（通過 {len(kept)} 件中）")
