@@ -4,14 +4,14 @@
 **代表（オーナー）が確認して初めて sales@ から手動送信**。AIは自動送信しない。
 提案メールは5点だけ（`../../skills/ses-sales/references/playbook.md` 準拠）。
 
-**送信元＝ITSセールス：`sales@its-llc.co.jp`（※正式アドレス要確認）** ← 確定次第このファイルを更新
+**送信元＝ITSセールス：`sales@its-tokyo.com`**（このアドレスからのみ提案を送る）
 **宛先＝配信元の担当者**（受信メールから抽出）。
 **⚠️ REOorGA配信アドレスからは絶対に送信・返信しない**（From/Reply-Toに入れない）。詳細 `sources.md`。
 
 ## テンプレ（配信への返信）
 
 ```
-From: sales@its-llc.co.jp（※要確認・ITSセールス）
+From: sales@its-tokyo.com（ITSセールス）
 To:   〔配信元担当のアドレス（受信メールから）〕
 件名：Re: 〔元の件名〕／ご提案（ITS合同会社）
 
