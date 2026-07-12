@@ -604,6 +604,36 @@ def post_notion_rows(result):
             print(f"[notion] error: {e}")
 
 
+def post_notion_page(digest_text, base_date):
+    """NOTION_PAGE_ID(親ページ)配下に、その日の候補ページ『SES候補 YYYY-MM-DD』を作成して本文を書く。
+    DBが無くてもNotionに自動反映できる簡易ルート（親ページを1つ用意＋共有するだけ）。"""
+    token = os.environ.get("NOTION_TOKEN")
+    parent = _env("NOTION_PAGE_ID") or _env("NOTION_PARENT_ID")
+    if not (token and parent):
+        return
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+               "Notion-Version": "2022-06-28"}
+    body = digest_text
+    chunks = [body[i:i + 1900] for i in range(0, len(body), 1900)][:95] or [""]
+    children = [{"object": "block", "type": "paragraph",
+                 "paragraph": {"rich_text": [{"type": "text", "text": {"content": c}}]}} for c in chunks]
+    payload = {
+        "parent": {"page_id": parent},
+        "properties": {"title": {"title": [{"text": {"content": f"SES候補 {base_date.isoformat()}"}}]}},
+        "children": children,
+    }
+    try:
+        req = urllib.request.Request("https://api.notion.com/v1/pages",
+                                     data=json.dumps(payload).encode("utf-8"),
+                                     headers=headers, method="POST")
+        urllib.request.urlopen(req, timeout=30)
+        print(f"[notion] page created: SES候補 {base_date.isoformat()}")
+    except urllib.error.HTTPError as e:
+        print(f"[notion] page error {e.code}: {e.read().decode('utf-8', 'ignore')[:400]}")
+    except Exception as e:  # noqa
+        print(f"[notion] page error: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", choices=["imap", "file"], default="file")
@@ -660,7 +690,8 @@ def main():
     print(digest)
     print("=" * 60)
     print(f"[ok] digest -> {path}")
-    post_notion_rows(result)
+    post_notion_page(digest, base_date)  # 親ページ配下に日次候補ページを作成（NOTION_PAGE_ID）
+    post_notion_rows(result)             # レビューDBがあれば行も追加（NOTION_DB_ID・任意）
 
 
 if __name__ == "__main__":
