@@ -53,7 +53,7 @@ def load_candidates(args):
 
 def pick_candidate(cands, selector):
     """イニシャル（部分一致・大文字小文字無視）または 1始まりの番号（スコア降順）で選ぶ。"""
-    ordered = sorted(cands, key=lambda c: c.get("score", 0), reverse=True)
+    ordered = sorted(cands, key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
     if selector.isdigit():
         i = int(selector)
         if 1 <= i <= len(ordered):
@@ -98,7 +98,7 @@ def main():
     elif len(cands) == 1:
         cand = cands[0]
     else:
-        ordered = sorted(cands, key=lambda c: c.get("score", 0), reverse=True)
+        ordered = sorted(cands, key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
         listing = "\n".join(
             f"  {i+1}. {c.get('engineer','?')} × {c.get('case','?')}"
             f"（{c.get('score','?')}点・{c.get('likelihood','?')}）"
