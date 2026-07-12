@@ -61,11 +61,23 @@ SALES_FROM = _env("SALES_FROM", "sales@its-tokyo.com")
 REOORGA_ADDR = _env("IMAP_USER", "contact@reorga.co.jp")
 FRESH_DAYS = int(_env("FRESH_DAYS", "5"))
 
-# 段階①のキーワード事前フィルタ（安価。案件がNW/Sec中心のため）。空にすれば全通過。
+# 段階①：まず"どれか1つでも"含む広い門（空にすれば全通過）。
 PREFILTER_KEYWORDS = [
     "ネットワーク", "セキュリティ", "NW", "インフラ", "サーバ", "server",
     "cisco", "aruba", "yamaha", "f5", "vmware", "hyper-v", "fw", "firewall",
     "linux", "windows", "security", "pl", "pm",
+]
+
+# 段階①（案件特化）：各グループから最低1語を含むことを必須にする（AND of OR）。
+# 現在のアクティブ案件＝遊技機NW/Sec は「ネットワーク AND セキュリティ」の両刀が必須。
+# → NW群とSec群の両方にヒットする要員だけを通し、両刀人材を的確に絞る。空リストにすると無効。
+PREFILTER_GROUPS = [
+    # ネットワーク群
+    ["ネットワーク", "network", "nw", "cisco", "aruba", "yamaha", "f5", "juniper",
+     "ルーティング", "スイッチ", "ロードバランサ", "l2", "l3"],
+    # セキュリティ群
+    ["セキュリティ", "security", "ファイアウォール", "firewall", "fw", "utm",
+     "ids", "ips", "脆弱", "soc", "waf", "paloalto", "palo alto", "fortigate", "fortinet"],
 ]
 
 # 採点で必須の設計ファイルだけ（プロンプト肥大／TPM超過を避ける）。ガードレールはSYSTEM_PROMPTに内蔵。
@@ -356,11 +368,17 @@ def prefilter(items, base_date, days):
                     reason = None  # 未来日付は許容（配信予告等）
             except ValueError:
                 pass
-        # キーワード
+        low = (it["body"] + " " + it.get("subject", "")).lower()
+        # 広い門：どれか1語
         if reason is None and PREFILTER_KEYWORDS:
-            low = it["body"].lower()
             if not any(k.lower() in low for k in PREFILTER_KEYWORDS):
                 reason = "必須キーワード不一致"
+        # 案件特化：各グループから最低1語（両刀など）
+        if reason is None and PREFILTER_GROUPS:
+            for gi, group in enumerate(PREFILTER_GROUPS):
+                if group and not any(k.lower() in low for k in group):
+                    reason = f"案件必須グループ{gi+1}不一致（両刀不成立等）"
+                    break
         (dropped if reason else kept).append({**it, "drop_reason": reason})
     return kept, dropped
 
@@ -568,7 +586,7 @@ def main():
           + (f"（内訳: {reasons}）" if reasons else ""))
 
     # 段階②に渡すのは新しい順に上限まで（プロンプト肥大とコストを抑え、高マッチを的確に）
-    stage2_max = int(_env("STAGE2_MAX", "25"))
+    stage2_max = int(_env("STAGE2_MAX", "40"))
     kept.sort(key=lambda x: (x.get("date") or ""), reverse=True)
     if len(kept) > stage2_max:
         print(f"[info] 段階②採点は新しい順 {stage2_max} 件に限定（通過 {len(kept)} 件中）")
