@@ -299,11 +299,42 @@ def eval_notion():
     return ok == len(checks)
 
 
+def eval_robustness():
+    """コードレビューで見つかった実バグの回帰テスト（H1/H3/L2/L3/M3）。決定論・APIキー不要。"""
+    print("── 堅牢性の回帰テスト（レビュー指摘の修正・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    # H1: score が文字列/欠落混在でも sorted() がクラッシュしない
+    try:
+        R._notion_blocks_from_result({"candidates": [
+            {"case": "A", "engineer": "X", "score": "65", "likelihood": "中"},
+            {"case": "B", "engineer": "Y", "likelihood": "高"}]})
+        chk("H1 score文字列混在でsorted落ちない", True)
+    except Exception:
+        chk("H1 score文字列混在でsorted落ちない", False)
+    # H3: 本文に別の @reorga.co.jp アドレスが混入したら 🔴
+    d = "From: sales@its-tokyo.com\nTo: x@y.co.jp\n件名:X\n\n返信先 dist@reorga.co.jp 村山 its-tokyo.com"
+    chk("H3 別reorgaアドレスを検出", any("🔴" in x and "reorga" in x for x in R.validate_draft(d)))
+    # L3: Re: の重ね付け除去＋空フォールバック
+    chk("L3 Re:Re:除去", R._fmt_reply_subject("Re: Re: 【NW】A.N") == "【NW】A.N")
+    chk("L3 空件名フォールバック", R._fmt_reply_subject("Re:") == "案件ご紹介")
+    # M3: 空・From違反の下書きは validate で違反（＝下書き化されない）
+    chk("M3 空下書きは違反", R.validate_draft("") == ["下書きが空"])
+    chk("M3 From違反を検出", any("From" in x for x in R.validate_draft("From: x@evil.com\n村山 its-tokyo.com")))
+    print(f"   堅牢性 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
-                             "dedup", "scoring", "all"],
+                             "dedup", "robustness", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -322,6 +353,8 @@ def main():
         results.append(eval_contact())
     if args.stage in ("dedup", "all"):
         results.append(eval_dedup())
+    if args.stage in ("robustness", "all"):
+        results.append(eval_robustness())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）

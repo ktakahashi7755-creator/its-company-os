@@ -119,7 +119,10 @@ def _decode(s):
     out = []
     for chunk, enc in decode_header(s):
         if isinstance(chunk, bytes):
-            out.append(chunk.decode(enc or "utf-8", "ignore"))
+            try:
+                out.append(chunk.decode(enc or "utf-8", "ignore"))
+            except (LookupError, TypeError):     # 不正なcharset名でも落とさない（L1）
+                out.append(chunk.decode("utf-8", "ignore"))
         else:
             out.append(chunk)
     return "".join(out)
@@ -162,11 +165,19 @@ def fetch_imap(base_date, days):
     msg_bytes = int(_env("MSG_BYTES", "40000"))   # 1通あたり先頭Nバイトだけ（重い添付を落とさず本文を取る）
     chunk = int(_env("IMAP_CHUNK", "100"))        # まとめ取り件数（往復を減らす）
     items = []
-    M = imaplib.IMAP4_SSL(host, port)
-    try:
+    tmo = int(_env("IMAP_TIMEOUT", "30"))
+    try:                                             # 接続/ログイン/選択の失敗で run 全体を落とさない（H2）
+        M = imaplib.IMAP4_SSL(host, port, timeout=tmo)
         M.login(user, pw)
         M.select(folder, readonly=True)  # readonly＝受信箱を汚さない
+    except Exception as e:  # noqa
+        print(f"[imap] 受信接続に失敗（IMAP_HOST/PASSWORD/到達性を確認）: {e} → 空で継続")
+        return items
+    try:
         typ, data = M.uid("SEARCH", None, f'(SINCE {since})')
+        if typ != "OK":
+            print(f"[imap] SEARCH 失敗（{typ}）→ 空で継続")
+            return items
         ids = data[0].split() if data and data[0] else []
         total = len(ids)
         if total > max_fetch:
@@ -221,10 +232,14 @@ def fetch_full_by_uids(uids):
     port = int(_env("IMAP_PORT", "993"))
     folder = _env("IMAP_FOLDER", "INBOX")
     out = {}
-    M = imaplib.IMAP4_SSL(host, port)
     try:
+        M = imaplib.IMAP4_SSL(host, port, timeout=int(_env("IMAP_TIMEOUT", "30")))
         M.login(REOORGA_ADDR, pw)
         M.select(folder, readonly=True)
+    except Exception as e:  # noqa  スキルシート再取得の失敗は要約なしで継続
+        print(f"[warn] スキルシート再取得の接続に失敗: {e}")
+        return out
+    try:
         for u in uids:
             typ, md = M.uid("FETCH", u, "(RFC822)")
             if typ == "OK" and md and isinstance(md[0], tuple) and md[0][1]:
@@ -505,7 +520,13 @@ def _score_chunk(chunk, offset, base_date, system, specs, cases):
         f"# プレフィルタ済みの配信（段階①通過）\n{feed}\n\n"
         f"上記を案件×要員で採点し、指定JSONのみ返してください。"
     )
-    text = _call_llm(system, user).strip()
+    try:                                             # 1バッチのAPI失敗で全採点を道連れにしない（M1）
+        text = _call_llm(system, user).strip()
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa
+        print(f"[score] バッチ採点でエラー（このバッチをスキップ）: {type(e).__name__}: {e}")
+        return {"candidates": [], "excluded": [], "note": f"バッチ失敗:{type(e).__name__}"}
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
         return {"candidates": [], "excluded": [], "note": "解析失敗", "raw": text}
@@ -537,6 +558,22 @@ def score_with_llm(kept, dropped, base_date):
             raw = r["raw"]
         if ci < n_chunks - 1:
             time.sleep(3)  # バッチ間で軽く間隔（レート制限緩和）
+    # LLMは score/src を文字列で返すことがある。数値に正規化しないと sorted() 等がクラッシュする（H1）。
+    for c in cands:
+        try:
+            c["score"] = int(float(c.get("score") or 0))
+        except (ValueError, TypeError):
+            c["score"] = 0
+        s = c.get("src")
+        if isinstance(s, str) and s.strip().lstrip("-").isdigit():
+            c["src"] = int(s)
+        bd = c.get("breakdown")
+        if isinstance(bd, dict):
+            for k, v in list(bd.items()):
+                try:
+                    bd[k] = int(float(v))
+                except (ValueError, TypeError):
+                    bd[k] = 0
     out = {"candidates": cands, "excluded": excl, "note": " / ".join(notes[:5])}
     if not cands and raw:
         out["raw"] = raw
@@ -545,9 +582,15 @@ def score_with_llm(kept, dropped, base_date):
 
 # ---------- 下書き確定（指示出し→送信可能な下書き） ----------
 def _fmt_reply_subject(subject):
-    """返信件名用に、既存の Re:/Fwd: 接頭辞を1つ剥がして本文だけ返す（重ね付け防止）。"""
+    """返信件名用に、既存の Re:/Fwd: 接頭辞を**全て**剥がして本文だけ返す（Re:Re: 重ね付け防止・L3）。
+    剥がした結果が空なら『案件ご紹介』にフォールバック。"""
     s = (subject or "").strip()
-    return re.sub(r"^\s*(re|fwd?|ｒｅ)\s*[:：]\s*", "", s, flags=re.I).strip()
+    while True:
+        s2 = re.sub(r"^\s*(re|fwd?|ｒｅ)\s*[:：]\s*", "", s, flags=re.I).strip()
+        if s2 == s:
+            break
+        s = s2
+    return s or "案件ご紹介"
 
 
 def load_case_mail_block(case_hint=""):
@@ -666,8 +709,8 @@ def backfill_contacts(result, kept):
             it = kept[src]
             info = extract_contact(it.get("from_addr", ""), it.get("body", ""), it.get("subject", ""))
             c["to"] = info["to"]
-            if info["found"]:
-                c["to_found"] = info["found"]
+            if info["sendable"]:                 # 送信可能アドレスのみ保持（reorga等を生成物に残さない・L2）
+                c["to_found"] = info["sendable"]
         elif not cur:
             c["to"] = "要・宛先確認"
 
@@ -723,34 +766,7 @@ def _its_key(case, engineer):
     return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def _drafts_log_path():
-    return os.path.join(HERE, "digests", "drafts-log.jsonl")
-
-
-def load_drafted():
-    """既に sales@ 下書きに入れた (案件,要員) 集合（重複作成を防ぐ・gitignore）。"""
-    seen = set()
-    path = _drafts_log_path()
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    r = json.loads(line)
-                    seen.add(_dupe_key(r.get("case"), r.get("engineer")))
-                except json.JSONDecodeError:
-                    continue
-    return seen
-
-
-def append_drafted(case, engineer, date_str):
-    path = _drafts_log_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"date": date_str, "case": case, "engineer": engineer},
-                           ensure_ascii=False) + "\n")
+# 重複防止は sales@ 下書きフォルダを X-ITS-Key で検索する方式（実行跨ぎで永続・ログファイル不要）。
 
 
 def build_draft_message(cand):
@@ -759,11 +775,10 @@ def build_draft_message(cand):
     import email.message
 
     p = reply_parts(cand)
-    # 送信ガードレール：REOorGA混入や宛先ドメイン違反があれば作らない
+    # 送信ガードレール：違反（REOorGA混入・From違反・空・ITS識別欠落等）が1つでもあれば作らない（M3）
     check = validate_draft(f"From: {SALES_FROM}\nTo: {p['to']}\n件名: {p['subject']}\n\n{p['body']}")
-    hard = [x for x in check if "🔴" in x]
-    if hard:
-        return None, hard
+    if check:
+        return None, check
     to_ok = ("@" in p["to"]) and _is_sendable_addr(p["to"])
     prefix = ""
     if not to_ok:
@@ -817,7 +832,16 @@ def save_drafts_to_sales(result, base_date):
     import imaplib
     import time as _time
 
-    targets = [c for c in result.get("candidates", []) if c.get("likelihood") in ("高", "中")]
+    # 高/中の候補。同一runに同じ(案件×要員)が複数来ても in-memory で重複排除（M2）
+    targets, _seen = [], set()
+    for c in result.get("candidates", []):
+        if c.get("likelihood") not in ("高", "中"):
+            continue
+        k = _its_key(c.get("case"), c.get("engineer"))
+        if k in _seen:
+            continue
+        _seen.add(k)
+        targets.append(c)
     if not targets:
         print("[drafts] 対象候補（高/中）なし")
         return
@@ -849,28 +873,33 @@ def save_drafts_to_sales(result, base_date):
                 return
     try:
         folder = _env("SALES_DRAFTS_FOLDER") or _detect_drafts_folder(M)
+        folder_q = f'"{folder}"' if (" " in folder or "(" in folder) else folder  # スペース等はクオート（L4）
         print(f"[drafts] 下書きフォルダ: {folder}")
+        selected = False
         try:
-            M.select(folder)   # HEADER 検索には mailbox 選択が必要
+            selected = M.select(folder_q)[0] == "OK"  # HEADER 検索には mailbox 選択が必要
         except Exception:  # noqa
-            pass
+            selected = False
+        if not selected:
+            print(f"[drafts] 下書きフォルダ選択に失敗（{folder}）→ 実行跨ぎの重複チェックは省略（同一run内は排除済）")
         for c in targets:
             key = _its_key(c.get("case"), c.get("engineer"))
-            # 下書きフォルダを X-ITS-Key で検索し、既にあれば作らない（ログに依存しない・実行跨ぎで重複防止）
-            try:
-                typ, data = M.search(None, "HEADER", "X-ITS-Key", key)
-                if typ == "OK" and data and data[0].split():
-                    dup += 1
-                    print(f"[drafts] 既に下書きあり（重複回避）: {c.get('engineer')} × {c.get('case')}")
-                    continue
-            except Exception:  # noqa  検索不可でも作成は続ける
-                pass
+            # 下書きフォルダを X-ITS-Key で検索し、既にあれば作らない（実行跨ぎの重複防止・select成功時のみ）
+            if selected:
+                try:
+                    typ, data = M.search(None, "HEADER", "X-ITS-Key", key)
+                    if typ == "OK" and data and data[0].split():
+                        dup += 1
+                        print(f"[drafts] 既に下書きあり（重複回避）: {c.get('engineer')} × {c.get('case')}")
+                        continue
+                except Exception:  # noqa  検索不可でも作成は続ける
+                    pass
             msg, hard = build_draft_message(c)
             if msg is None:
                 skipped += 1
                 print(f"[drafts] スキップ（ガードレール違反）: {c.get('engineer')} {hard}")
                 continue
-            typ, _ = M.append(folder, "(\\Draft)",
+            typ, _ = M.append(folder_q, "(\\Draft)",
                               imaplib.Time2Internaldate(_time.time()), msg.as_bytes())
             if typ == "OK":
                 saved += 1
@@ -901,10 +930,12 @@ def validate_draft(draft, cand=None):
             issues.append(f"From が {SALES_FROM} でない（{m.group(1).strip()[:60]}）")
     else:
         issues.append("From 行が見つからない")
-    if REOORGA_ADDR.lower() in low:
-        issues.append(f"🔴 REOorGA受信アドレス({REOORGA_ADDR})が下書きに混入（送信物に出してはならない）")
+    # REOorGAは受信専用ドメイン。完全一致だけでなく @reorga.co.jp ドメイン全体を送信物から排除（H3）
+    reorga_dom = REOORGA_ADDR.split("@")[-1].lower()
+    if re.search(r"@" + re.escape(reorga_dom), low):
+        issues.append(f"🔴 REOorGA受信ドメイン(@{reorga_dom})のアドレスが下書きに混入（送信物に出してはならない）")
     to_m = re.search(r"^\s*to\s*[:：]\s*(.+)$", draft, re.I | re.M)
-    if to_m and REOORGA_ADDR.split("@")[-1].lower() in to_m.group(1).lower():
+    if to_m and reorga_dom in to_m.group(1).lower():
         issues.append("🔴 宛先(To)がREOorGAドメイン（配信元担当のアドレスに直す）")
     # ITSの識別（送信元 its-tokyo.com＋名乗り 村山）が本文にあること
     if "its-tokyo.com" not in low or "村山" not in draft:
@@ -950,7 +981,7 @@ def render_digest(result, base_date, kept, dropped):
              f"送信元：ITSセールス {SALES_FROM} ※REOorGAアドレスからは送信しない",
              f"ファネル：入力 →〔①プレフィルタ〕通過{len(kept)}・除外{len(dropped)} →〔②採点〕候補{len(result.get('candidates', []))}",
              ""]
-    cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0), reverse=True)
+    cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
     if cands:
         lines.append("## 提案候補（スコア順）")
         for i, c in enumerate(cands, 1):
@@ -1082,7 +1113,7 @@ def _notion_blocks_from_result(result, token=None):
     token があればスキルシート原本(Excel/PDF)をNotionにアップロードし、file ブロックで開けるようにする。
     返信全文は sales@ の下書きに入る。Notionは『見て判断する』面に絞る。"""
     blocks = []
-    cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0), reverse=True)
+    cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
     if cands:
         blocks.append(_nt_block("heading_2", "提案候補（スコア順）"))
     for c in cands:
