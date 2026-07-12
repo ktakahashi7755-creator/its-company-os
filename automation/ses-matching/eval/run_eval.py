@@ -210,7 +210,7 @@ def eval_finalize():
         ("担当者＋様", "伝刀様" in d),
         ("要員名＋様", "配信で頂きましたA.N様" in d),
         ("案件本文の固定挿入", "大手遊技機メーカー向けに" in d and "＝＝＝＝＝" in d),
-        ("末尾にITS村山の署名", "ITS合同会社 営業部　村山愛" in d and d.rstrip().endswith("◇◆")),
+        ("末尾にITS村山の署名", "ITS合同会社 営業部　村山愛" in d and d.rstrip().endswith("◆◇")),
         ("面談可能日を尋ねる", "オンライン面談可能日" in d),
         ("ガードレール違反ゼロ", R.validate_draft(d) == []),
         ("REOorGA不在", R.REOORGA_ADDR not in d),
@@ -250,12 +250,10 @@ def eval_drafts():
         chk("From=sales@", m1["From"] == R.SALES_FROM)
         chk("To=担当アドレス", m1["To"] == "dento@routezero.example.co.jp")
         chk("件名 Re:…_ITS村山", (m1["Subject"] or "").startswith("Re:") and (m1["Subject"] or "").endswith("_ITS村山"))
-        bp = m1.get_body(preferencelist=("plain",))
-        body = bp.get_content() if bp is not None else ""
+        body = m1.get_content()
         chk("本文に案件本文", "大手遊技機メーカー向けに" in body)
         chk("REOorGA不在", R.REOORGA_ADDR not in m1.as_string())
-        atts = [p.get_filename() for p in m1.iter_attachments()]
-        chk("スキルシート原本を添付", "技術経歴書_A.N.xlsx" in atts)
+        chk("スキルシート添付なし（廃止）", list(m1.iter_attachments()) == [])
     # 宛先未確定の候補 → To 空＋注記
     c2 = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "K.H", "company": "〇〇株式会社",
           "person": "", "to": "要・宛先確認", "likelihood": "高", "flags": ["年齢上限超・代表確認"]}
@@ -276,16 +274,18 @@ def eval_notion():
     res = {"candidates": [{
         "case": "遊技機メーカー NW/Sec 支援", "engineer": "A.N", "score": 65, "likelihood": "中", "tier": "①",
         "company": "ルートゼロ株式会社", "person": "伝刀", "to": "要・宛先確認", "summary": "Azure20年",
+        "age": "50代",
         "breakdown": {"必須": 18, "鮮度": 15, "単価": 12, "商流": 9, "タイミング": 7, "見せ方": 3, "継続": 1},
         "skillsheet_summary": "Cisco/F5設計〜運用、脆弱性診断。", "skillsheet_files": ["技術経歴書_A.N.xlsx"],
         "flags": ["年齢上限超・代表確認"],
         "draft": "From: sales@its-tokyo.com\n件名: Re:X_ITS村山\n\nルートゼロ株式会社\n伝刀様\nITS営業部の村山でございます。\n▼案件\n大手遊技機メーカー向けに"}],
         "excluded": [{"item": "M.R", "reason": "両刀足切り"}]}
-    blocks = R._notion_blocks_from_result(res)
+    blocks = R._notion_blocks_from_result(res)  # token無し＝ファイルアップロードはしない
     allc = " ".join(b[b["type"]]["rich_text"][0]["text"]["content"]
                     for b in blocks if b["type"] != "divider")
     checks = [
         ("スコア/マッチ度を含む", "65/100" in allc and "マッチ内訳" in allc),
+        ("年齢を表示", "年齢 50代" in allc),
         ("サマリーを含む", "サマリー" in allc),
         ("スキルシート要約＋ファイル名を含む", "技術経歴書_A.N.xlsx" in allc and "スキルシート" in allc),
         ("返信本文を含まない(縦に広がらない)", "▼案件" not in allc and "村山でございます" not in allc),
