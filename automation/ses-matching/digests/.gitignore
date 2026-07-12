@@ -3,5 +3,6 @@ digest-*.md
 candidates-*.json
 proposed-log.jsonl
 drafts-log.jsonl
+notion-db-id.txt
 !.gitignore
 !README.md

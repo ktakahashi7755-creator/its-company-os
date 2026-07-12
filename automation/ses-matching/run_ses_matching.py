@@ -1111,8 +1111,21 @@ def _notion_api(method, url, token, body=None):
 NOTION_DB_TITLE = "SES提案トラッカー"
 
 
+_DB_ID_CACHE = os.path.join(HERE, "digests", "notion-db-id.txt")
+
+
 def ensure_notion_db(token, parent):
-    """親ページ配下の『SES提案トラッカー』DBを探し、無ければ作成してdb_idを返す（best-effort）。"""
+    """親ページ配下の『SES提案トラッカー』DBを探し、無ければ作成してdb_idを返す（best-effort）。
+    作成したidはローカル(digests/notion-db-id.txt・gitignore)にも保存し、検索インデックス遅延で
+    重複DBが作られるのを防ぐ（Secret NOTION_DB_ID 登録前の連続実行対策）。"""
+    # 1) ローカルキャッシュを最優先（前回作成分を確実に再利用）
+    try:
+        if os.path.exists(_DB_ID_CACHE):
+            cached = open(_DB_ID_CACHE, encoding="utf-8").read().strip()
+            if cached:
+                return cached
+    except Exception:  # noqa
+        pass
     found = _notion_api("POST", "https://api.notion.com/v1/search", token,
                         {"query": NOTION_DB_TITLE,
                          "filter": {"property": "object", "value": "database"}})
@@ -1143,6 +1156,12 @@ def ensure_notion_db(token, parent):
     })
     if created:
         cid = created.get("id")
+        try:
+            os.makedirs(os.path.dirname(_DB_ID_CACHE), exist_ok=True)
+            with open(_DB_ID_CACHE, "w", encoding="utf-8") as f:
+                f.write(cid or "")
+        except Exception:  # noqa
+            pass
         print(f"[notion-db] データベース作成: {NOTION_DB_TITLE}（id={cid}）"
               f"※固定するなら Secret NOTION_DB_ID にこのidを登録")
         return cid
@@ -1165,7 +1184,7 @@ def _db_row_props(c, base_date):
     return {
         "案件×要員": {"title": _rt(f"{c.get('engineer','?')} × {c.get('case','?')}")},
         "キー": {"rich_text": _rt(_its_key(c.get("case"), c.get("engineer")))},
-        "面談通過可能性": {"select": {"name": c.get("likelihood", "低")}},
+        "面談通過可能性": {"select": {"name": (c.get("likelihood") or "低")}},
         "スコア": {"number": c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0},
         "年齢": {"rich_text": _rt(c.get("age", "不明"))},
         "配信元": {"rich_text": _rt(f"{c.get('company','?')} {c.get('person','')}")},
@@ -1190,8 +1209,13 @@ def post_notion_db_rows(result, base_date):
                    key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0,
                    reverse=True)
     added = dup = 0
+    seen = set()  # 同一run内の重複排除（検索インデックス遅延で_db_has_keyが両方Falseを返す穴を塞ぐ）
     for c in cands:
         key = _its_key(c.get("case"), c.get("engineer"))
+        if key in seen:
+            dup += 1
+            continue
+        seen.add(key)
         if _db_has_key(token, db_id, key):
             dup += 1
             continue
@@ -1360,7 +1384,10 @@ def main():
     print(digest)
     print("=" * 60)
     print(f"[ok] digest -> {path}")
-    post_notion_page(result, base_date)  # 日次スナップショット（要約＋マッチ度＋年齢＋スキルシート）
+    try:                                 # 日次スナップショット（要約＋マッチ度＋年齢＋スキルシート）
+        post_notion_page(result, base_date)
+    except Exception as e:  # noqa  ページ投稿の失敗は後続（DB・下書き）を止めない
+        print(f"[notion] ページ投稿スキップ（エラー）: {e}")
     try:                                 # 送信ステータス管理DB（未送信/送信済/見送り・重複行なし）
         post_notion_db_rows(result, base_date)
     except Exception as e:  # noqa  DB反映の失敗は本体を止めない
