@@ -68,8 +68,8 @@ PREFILTER_KEYWORDS = [
     "linux", "windows", "security", "pl", "pm",
 ]
 
-# 採点の材料になる設計ファイル
-SPEC_FILES = ["scoring.md", "sources.md", "signature.md", "skillsheet-intake.md", "reply-template.md"]
+# 採点で必須の設計ファイルだけ（プロンプト肥大／TPM超過を避ける）。ガードレールはSYSTEM_PROMPTに内蔵。
+SPEC_FILES = ["scoring.md", "signature.md"]
 
 
 def read(rel_to_here):
@@ -146,40 +146,167 @@ def fetch_imap(base_date, days):
     folder = _env("IMAP_FOLDER", "INBOX")
 
     since = (base_date - datetime.timedelta(days=days)).strftime("%d-%b-%Y")
-    max_fetch = int(_env("MAX_FETCH", "400"))  # 大量受信箱でも重くならない上限
+    max_fetch = int(_env("MAX_FETCH", "2500"))    # 5日分をカバーする件数（軽量取得なので広めでOK）
+    msg_bytes = int(_env("MSG_BYTES", "40000"))   # 1通あたり先頭Nバイトだけ（重い添付を落とさず本文を取る）
+    chunk = int(_env("IMAP_CHUNK", "100"))        # まとめ取り件数（往復を減らす）
     items = []
     M = imaplib.IMAP4_SSL(host, port)
     try:
         M.login(user, pw)
         M.select(folder, readonly=True)  # readonly＝受信箱を汚さない
-        typ, data = M.search(None, f'(SINCE {since})')
+        typ, data = M.uid("SEARCH", None, f'(SINCE {since})')
         ids = data[0].split() if data and data[0] else []
         total = len(ids)
         if total > max_fetch:
-            ids = ids[-max_fetch:]  # 新しい順に最新 max_fetch 件だけ（IMAPは昇順なので末尾が最新）
+            ids = ids[-max_fetch:]  # IMAPは昇順なので末尾＝最新
         print(f"[imap] {folder}: SINCE {since} で {total} 件ヒット → 最新 {len(ids)} 件を取得"
               + (f"（上限{max_fetch}で {total-len(ids)} 件を今回はスキップ）" if total > max_fetch else ""))
-        for num in ids:
-            typ, msg_data = M.fetch(num, "(RFC822)")
-            if typ != "OK" or not msg_data or not msg_data[0]:
+        # 本文の先頭 msg_bytes だけをバッチ取得（添付は読まない＝コスト削減）。UIDも取得し後で再取得可能に。
+        spec = f"(UID BODY.PEEK[]<0.{msg_bytes}>)"
+        for i in range(0, len(ids), chunk):
+            typ, msg_data = M.uid("FETCH", b",".join(ids[i:i + chunk]), spec)
+            if typ != "OK" or not msg_data:
                 continue
-            msg = email.message_from_bytes(msg_data[0][1])
-            frm_name, frm_addr = email.utils.parseaddr(_decode(msg.get("From")))
-            date_tuple = email.utils.parsedate_tz(msg.get("Date") or "")
-            dt = (datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple)).date()
-                  if date_tuple else None)
-            items.append({
-                "from_name": frm_name, "from_addr": frm_addr,
-                "subject": _decode(msg.get("Subject")),
-                "date": dt.isoformat() if dt else None,
-                "body": _body_text(msg).strip(),
-            })
+            for entry in msg_data:
+                if not (isinstance(entry, tuple) and entry[1]):
+                    continue
+                try:
+                    um = re.search(rb"UID (\d+)", entry[0] or b"")
+                    uid = um.group(1).decode() if um else None
+                    msg = email.message_from_bytes(entry[1])  # 途中で切れていてもヘッダ/先頭本文は読める
+                    frm_name, frm_addr = email.utils.parseaddr(_decode(msg.get("From")))
+                    date_tuple = email.utils.parsedate_tz(msg.get("Date") or "")
+                    dt = (datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple)).date()
+                          if date_tuple else None)
+                    items.append({
+                        "uid": uid,
+                        "from_name": frm_name, "from_addr": frm_addr,
+                        "subject": _decode(msg.get("Subject")),
+                        "date": dt.isoformat() if dt else None,
+                        "body": _body_text(msg).strip(),
+                    })
+                except Exception:  # noqa  1通の解析失敗で全体を止めない
+                    continue
     finally:
         try:
             M.logout()
         except Exception:  # noqa
             pass
     return items
+
+
+def fetch_full_by_uids(uids):
+    """マッチした要員だけ、添付込みの全文をUIDで取得（＝コスト削減の肝：ここで初めて添付を読む）。"""
+    import imaplib
+
+    uids = [u for u in uids if u]
+    if not uids:
+        return {}
+    host = _env("IMAP_HOST")
+    pw = _env("IMAP_PASSWORD")
+    if not (host and pw):
+        return {}
+    port = int(_env("IMAP_PORT", "993"))
+    folder = _env("IMAP_FOLDER", "INBOX")
+    out = {}
+    M = imaplib.IMAP4_SSL(host, port)
+    try:
+        M.login(REOORGA_ADDR, pw)
+        M.select(folder, readonly=True)
+        for u in uids:
+            typ, md = M.uid("FETCH", u, "(RFC822)")
+            if typ == "OK" and md and isinstance(md[0], tuple) and md[0][1]:
+                try:
+                    out[u] = email.message_from_bytes(md[0][1])
+                except Exception:  # noqa
+                    pass
+    finally:
+        try:
+            M.logout()
+        except Exception:  # noqa
+            pass
+    return out
+
+
+def extract_skillsheets(msg):
+    """添付のスキルシート(PDF/Excel)からテキストを抽出。**マッチ後のみ**呼ぶ。"""
+    results = []
+    if msg is None:
+        return results
+    for part in msg.walk():
+        fname = _decode(part.get_filename()) if part.get_filename() else ""
+        ctype = (part.get_content_type() or "").lower()
+        low = fname.lower()
+        is_pdf = ctype == "application/pdf" or low.endswith(".pdf")
+        is_xls = "spreadsheet" in ctype or "excel" in ctype or low.endswith((".xlsx", ".xls"))
+        if not (is_pdf or is_xls):
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        text = ""
+        try:
+            if is_pdf:
+                import fitz
+
+                doc = fitz.open(stream=payload, filetype="pdf")
+                text = "\n".join(p.get_text() for p in doc)[:8000]
+                if len(text.strip()) < 20:
+                    text = "（PDFがスキャン画像の可能性。要OCR・原本参照）"
+            else:
+                import io
+                import openpyxl
+
+                wb = openpyxl.load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
+                rows = []
+                for ws in wb.worksheets:
+                    for row in ws.iter_rows(values_only=True):
+                        vals = [str(c) for c in row if c not in (None, "")]
+                        if vals:
+                            rows.append(" | ".join(vals))
+                    if len("\n".join(rows)) > 8000:
+                        break
+                text = "\n".join(rows)[:8000]
+        except Exception as e:  # noqa
+            text = f"（添付の読取に失敗: {e}）"
+        results.append((fname or "添付", text))
+    return results
+
+
+def summarize_skillsheet(sheets, case_hint):
+    """抽出テキストからスキル要約を生成（skillsheet-intake.md の様式）。**マッチ後のみ**。"""
+    if not sheets:
+        return ""
+    joined = "\n\n".join(f"[{fn}]\n{tx}" for fn, tx in sheets)[:12000]
+    sys_p = ("スキルシートのテキストから、日本語でスキル要約を作る。強み/上流(PL等)/対応環境/単価/"
+             "案件適合/確認点 を5〜7行で簡潔に。嘘・補完はしない（不明は『要確認』）。")
+    user_p = f"# 対象案件のヒント\n{case_hint}\n\n# スキルシート抽出テキスト\n{joined}\n\n要約テキストのみ返す。"
+    try:
+        return _call_llm(sys_p, user_p, json_mode=False).strip()[:1500]
+    except Exception:  # noqa
+        return "（要約生成に失敗・原本参照）"
+
+
+def enrich_skillsheets(result, kept):
+    """スコアで高/中の『要員』候補だけ、添付スキルシートを読み込み→要約を付与。"""
+    cands = result.get("candidates", [])
+    targets = [c for c in cands
+               if str(c.get("kind", "")).startswith("要員")
+               and c.get("likelihood") in ("高", "中")
+               and isinstance(c.get("src"), int) and 0 <= c["src"] < len(kept)]
+    uids = list({kept[c["src"]].get("uid") for c in targets if kept[c["src"]].get("uid")})
+    if not uids:
+        return
+    print(f"[info] マッチした要員 {len(targets)} 件のスキルシートを取得・要約（添付はここで初めて読む）")
+    msgs = fetch_full_by_uids(uids)
+    for c in targets:
+        uid = kept[c["src"]].get("uid")
+        sheets = extract_skillsheets(msgs.get(uid))
+        if sheets:
+            c["skillsheet_files"] = [fn for fn, _ in sheets]
+            c["skillsheet_summary"] = summarize_skillsheet(sheets, c.get("case", ""))
+        else:
+            c["skillsheet_note"] = "スキルシート添付なし（本文サマリーで判断）"
 
 
 def load_from_files(paths):
@@ -251,9 +378,17 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 - 資料に無い情報を捏造しない。不明は "要確認"。
 - 提案は下書きのみ。送信はしない。下書き末尾に signature.md の署名を必ず付ける。
 
+マッチングの原則（精度最優先・プロ品質）:
+- 【ITSの案件 × 配信の"要員"】案件定義の必須スキルに対し、要員の《サマリー文＋件名》で充足を判断する。kind="要員"。
+- 【ITSの要員 × 配信の"案件"】案件は添付が無い前提。《案件概要(本文)》でマッチを判断する。kind="案件"。
+- **添付スキルシートは今は読まない。** 本文サマリー/件名/案件概要"だけ"で判断する（マッチ後に別工程で読む）。
+- 各候補には、根拠にした配信の番号を src（0始まりの整数）で必ず入れる。
+- 必須スキル未充足・情報不足・単価/商流/鮮度で外れるものは candidates に入れず excluded に回す。
+  candidates は面談通過可能性 高/中 のみ（低は除外）。数を稼がず、確度の高いものだけを的確に。
+
 採点は scoring.md の100点ルーブリックに従い、面談通過可能性を 高/中/低 で出す。
 出力は必ず次のJSONのみ（前後に文章を付けない）:
-{{"candidates":[{{"case":"案件名","engineer":"イニシャル","score":0,"likelihood":"高|中|低",
+{{"candidates":[{{"src":0,"kind":"要員|案件","case":"案件名","engineer":"イニシャル","score":0,"likelihood":"高|中",
 "tier":"①/②等","company":"配信元会社","person":"担当者名","to":"担当アドレス or 要・宛先確認",
 "summary":"要員/案件サマリー","reason":"通過根拠","concern":"懸念とフォロー","flags":["年齢上限超・代表確認 等"],
 "draft":"From/To/件名/本文/署名まで含む提案下書き全文"}}],
@@ -261,19 +396,20 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 "note":"全体所見"}}"""
 
 
-def _call_llm(system, user):
-    """OpenAI / Anthropic のどちらかで応答テキストを返す。"""
+def _call_llm(system, user, json_mode=True):
+    """OpenAI / Anthropic のどちらかで応答テキストを返す。json_mode=False で通常テキスト。"""
     if LLM_PROVIDER == "openai":
         from openai import OpenAI
 
         if not _env("OPENAI_API_KEY"):
             sys.exit("OPENAI_API_KEY が未設定です（--dry-run なら不要）。")
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        kwargs = {"response_format": {"type": "json_object"}} if json_mode else {}
         resp = client.chat.completions.create(
             model=OPENAI_MODEL, max_tokens=4000,
-            response_format={"type": "json_object"},
             messages=[{"role": "system", "content": system},
                       {"role": "user", "content": user}],
+            **kwargs,
         )
         return resp.choices[0].message.content or ""
     # anthropic
@@ -290,11 +426,12 @@ def _call_llm(system, user):
 
 
 def score_with_llm(kept, dropped, base_date):
-    specs = load_specs()
-    cases = load_case_defs()
+    per_item = int(_env("PER_ITEM_CHARS", "1200"))  # 1通あたりの本文文字数（TPM超過を避ける）
+    specs = load_specs()[:6000]
+    cases = load_case_defs()[:6000]
     feed = "\n\n".join(
-        f"--- 配信{i+1} (会社:{it.get('from_name') or '?'} <{it.get('from_addr') or '?'}> "
-        f"日付:{it.get('date') or '不明'}) ---\n件名:{it.get('subject','')}\n{it['body'][:4000]}"
+        f"--- 配信 src={i} (会社:{it.get('from_name') or '?'} <{it.get('from_addr') or '?'}> "
+        f"日付:{it.get('date') or '不明'}) ---\n件名:{it.get('subject','')}\n{it['body'][:per_item]}"
         for i, it in enumerate(kept)
     )
     dropped_note = "、".join(f"{d.get('drop_reason')}" for d in dropped) or "なし"
@@ -334,6 +471,14 @@ def render_digest(result, base_date, kept, dropped):
                 f"- サマリー：{c.get('summary','')}",
                 f"- 通過根拠：{c.get('reason','')}",
                 f"- 懸念・フォロー：{c.get('concern','')}",
+            ]
+            if c.get("skillsheet_summary"):
+                files = "／".join(c.get("skillsheet_files", [])) or "添付"
+                lines += [f"- 📎 スキルシート（{files}・マッチ後に読込）：",
+                          "  " + c["skillsheet_summary"].replace("\n", "\n  ")]
+            elif c.get("skillsheet_note"):
+                lines.append(f"- 📎 {c['skillsheet_note']}")
+            lines += [
                 "- ▶ 提案下書き（承認後に手動送信）：",
                 "  > " + (c.get("draft", "").replace("\n", "\n  > ")),
                 "",
@@ -374,10 +519,14 @@ def post_notion_rows(result):
             "スコア": {"number": c.get("score", 0)},
             "ステータス": {"select": {"name": "未確認"}},
         }
-        payload = {"parent": {"database_id": db_id}, "properties": props,
-                   "children": [{"object": "block", "type": "paragraph",
-                                 "paragraph": {"rich_text": [{"type": "text",
-                                 "text": {"content": (c.get("draft", ""))[:1900]}}]}}]}
+        blocks = []
+        if c.get("skillsheet_summary"):
+            files = "／".join(c.get("skillsheet_files", [])) or "添付"
+            blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
+                {"type": "text", "text": {"content": f"【スキル要約 {files}】\n{c['skillsheet_summary']}"[:1900]}}]}})
+        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
+            {"type": "text", "text": {"content": (c.get("draft", ""))[:1900]}}]}})
+        payload = {"parent": {"database_id": db_id}, "properties": props, "children": blocks}
         try:
             req = urllib.request.Request("https://api.notion.com/v1/pages",
                                          data=json.dumps(payload).encode("utf-8"),
@@ -411,9 +560,19 @@ def main():
         items = load_from_files(paths)
 
     kept, dropped = prefilter(items, base_date, FRESH_DAYS)
-    print(f"[info] 取り込み {len(items)} 件 → 段階①通過 {len(kept)} / 除外 {len(dropped)}")
+    # 除外理由は件数サマリのみ（大量ログを避ける）
+    reasons = {}
     for d in dropped:
-        print(f"       除外: {d.get('drop_reason')} | {d['body'][:40].replace(chr(10),' ')}")
+        reasons[d.get("drop_reason") or "?"] = reasons.get(d.get("drop_reason") or "?", 0) + 1
+    print(f"[info] 取り込み {len(items)} 件 → 段階①通過 {len(kept)} / 除外 {len(dropped)}"
+          + (f"（内訳: {reasons}）" if reasons else ""))
+
+    # 段階②に渡すのは新しい順に上限まで（プロンプト肥大とコストを抑え、高マッチを的確に）
+    stage2_max = int(_env("STAGE2_MAX", "25"))
+    kept.sort(key=lambda x: (x.get("date") or ""), reverse=True)
+    if len(kept) > stage2_max:
+        print(f"[info] 段階②採点は新しい順 {stage2_max} 件に限定（通過 {len(kept)} 件中）")
+        kept = kept[:stage2_max]
 
     if args.dry_run:
         print("[dry-run] 採点はスキップ（APIキー不要）。段階①の配線を確認しました。")
@@ -423,6 +582,12 @@ def main():
 
     print(f"[info] LLMプロバイダ: {LLM_PROVIDER}（model: {OPENAI_MODEL if LLM_PROVIDER=='openai' else ANTHROPIC_MODEL}）")
     result = score_with_llm(kept, dropped, base_date)
+    # マッチした『要員』候補だけ、添付スキルシートをここで初めて読み込み→要約（IMAP時のみ）
+    if args.source == "imap":
+        try:
+            enrich_skillsheets(result, kept)
+        except Exception as e:  # noqa  添付読込の失敗はダイジェスト全体を止めない
+            print(f"[warn] スキルシート読込をスキップ: {e}")
     digest = render_digest(result, base_date, kept, dropped)
     path = write_digest(digest, base_date)
     print("=" * 60)

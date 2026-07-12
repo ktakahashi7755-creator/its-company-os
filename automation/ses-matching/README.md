@@ -73,9 +73,14 @@ automation/ses-matching/
 
 ## 自動化の実行（実装済み）
 
-`run_ses_matching.py` が **IMAP受信（読むだけ）→ 段階①プレフィルタ（鮮度5日＋必須語）→
-段階②AI採点（OpenAI/Claude・`scoring.md`）→ ダイジェスト生成（digests/）→ 任意でNotion投稿** を行う。
+`run_ses_matching.py` が **IMAP受信（本文の先頭のみ・添付は読まない）→ 段階①プレフィルタ（鮮度5日＋必須語）→
+段階②AI採点（OpenAI/Claude・`scoring.md`）→ マッチした要員だけ添付スキルシートを読込・要約 →
+ダイジェスト生成（digests/）→ 任意でNotion投稿** を行う。
 **メールの自動送信はしない**（下書きまで）。採点キーは OpenAI か Anthropic のどちらか一方でよい。
+
+**コスト最適化**：まず安いテキスト（要員のサマリー＋件名／案件は案件概要）でマッチし、**面談通過可能性 高/中に
+なった要員だけ**、そのメールをUIDで再取得して**添付PDF/Excelを初めて読み込み**→要約→Notion反映。
+重い添付を無駄に読まない（`skillsheet-intake.md`）。
 
 ```bash
 # 認証情報なしで配線確認（サンプル入力・APIキー不要）
