@@ -26,6 +26,18 @@
 
 > 認証情報（パスワード等）はここに書かない。接続はコネクタのOAuth／本番自動化はGitHub Secretsで扱う。
 
+### 自動取り込み（IMAP）の設定値
+
+`run_ses_matching.py` が受信専用アドレスを **読むだけ**（`readonly`）で取り込む。環境変数：
+
+| 変数 | 例／既定 | 置き場 |
+|---|---|---|
+| `IMAP_HOST` | 受信サーバ名（スマホのメール設定に表示） | GitHub Secrets |
+| `IMAP_PORT` | 993（SSL） | Variables（任意） |
+| `IMAP_USER` | contact@reorga.co.jp | Secrets |
+| `IMAP_PASSWORD` | ★パスワード | **Secrets（コード/チャットに書かない）** |
+| `IMAP_FOLDER` | INBOX ／ SES/REOorGA | Variables（任意） |
+
 > 接続後：受信を `SES/REOorGA` ラベルに自動仕分け → スケジュール実行のAIが未読を読み
 > `inbox-案件.md` / `inbox-要員.md` を自動生成する。接続まではメール本文を手動で貼付。
 

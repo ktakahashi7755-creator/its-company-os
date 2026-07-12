@@ -50,6 +50,7 @@ automation/ses-matching/
 ├── inbox-要員.example.md      ← 人材配信/自社プールを貼る雛形（inbox-要員.md にコピー）
 ├── reply-template.md         ← ITSセールスからの提案下書きテンプレ＋送信前チェック
 ├── signature.md              ← 送信者名・署名の正本（村山愛／営業部）
+├── run_ses_matching.py       ← 自動化本体（IMAP取込→採点→digest/Notion）※送信はしない
 ├── examples/                 ← 動作確認サンプル（ダミー入力＋実行結果ダイジェスト）
 └── digests/                  ← 生成された日次ダイジェストの置き場
 ```
@@ -70,11 +71,39 @@ automation/ses-matching/
 4. ✓の案件×要員は、下書きを最終確認し、**ITSセールスから配信元へ個別に手動送信**。
 5. 結果（面談/見送り）を `../../data/pipeline.md` に反映。
 
-## 完全自動化への拡張（接続後）
+## 自動化の実行（実装済み）
 
-- REOorGAをGmail等でMCP接続 →「SES/REOorGA」ラベル自動仕分け → スケジュール実行のAIが
-  未読を読み `inbox-案件.md`/`inbox-要員.md` を自動生成 → ダイジェストまで無人化。
-- さらに既存の GitHub Actions 方式（`../run_board_meeting.py` 同型）で毎朝生成→通知に拡張可。
+`run_ses_matching.py` が **IMAP受信（読むだけ）→ 段階①プレフィルタ（鮮度5日＋必須語）→
+段階②Claude採点（`scoring.md`）→ ダイジェスト生成（digests/）→ 任意でNotion投稿** を行う。
+**メールの自動送信はしない**（下書きまで）。
+
+```bash
+# 認証情報なしで配線確認（サンプル入力・APIキー不要）
+python automation/ses-matching/run_ses_matching.py --dry-run --date 2026-07-12
+# 貼り込みinboxを採点（半自動）
+python automation/ses-matching/run_ses_matching.py --source file \
+  --input automation/ses-matching/inbox-案件.md --input2 automation/ses-matching/inbox-要員.md
+# IMAPから取り込み（本番・Actions）
+python automation/ses-matching/run_ses_matching.py --source imap
+```
+
+**定期実行**：`.github/workflows/ses-matching.yml`（既定 8:30 JST／手動実行可）。
+digestは成果物(artifact)＋Notionへ。**リポジトリにはコミットしない**（個人情報保護）。
+
+### 必要な GitHub Secrets / Variables
+
+| 種別 | キー | 用途 |
+|---|---|---|
+| Secret | `ANTHROPIC_API_KEY` | 採点（Claude API） |
+| Secret | `IMAP_HOST` / `IMAP_USER` / `IMAP_PASSWORD` | 受信（contact@reorga.co.jp を読む） |
+| Variable | `IMAP_PORT`(993) / `IMAP_FOLDER` / `FRESH_DAYS`(5) / `SALES_FROM` | 任意設定 |
+| Secret | `NOTION_TOKEN` / `NOTION_DB_ID` | レビューDBへ行追加（任意） |
+
+> `IMAP_PASSWORD` は必ず Secrets。コード・チャット・mdに書かない。
+
+## さらなる拡張
+
+- スキルシート添付（Excel/PDF）の本文抽出（`pymupdf`/`openpyxl`）を取り込みに追加（`skillsheet-intake.md`）。
 - **送信だけは常に人手**を維持（ガードレール）。
 
 ## KPIループ（改善を回す）
