@@ -281,7 +281,8 @@ def extract_skillsheets(msg):
                 text = "\n".join(rows)[:8000]
         except Exception as e:  # noqa
             text = f"（添付の読取に失敗: {e}）"
-        results.append((fname or "添付", text))
+        # (ファイル名, 抽出テキスト, 原本バイト)。原本は sales@ 下書きへの添付に使う
+        results.append((fname or "添付", text, payload))
     return results
 
 
@@ -289,7 +290,7 @@ def summarize_skillsheet(sheets, case_hint):
     """抽出テキストからスキル要約を生成（skillsheet-intake.md の様式）。**マッチ後のみ**。"""
     if not sheets:
         return ""
-    joined = "\n\n".join(f"[{fn}]\n{tx}" for fn, tx in sheets)[:12000]
+    joined = "\n\n".join(f"[{fn}]\n{tx}" for fn, tx, _ in sheets)[:12000]
     sys_p = ("スキルシートのテキストから、日本語でスキル要約を作る。強み/上流(PL等)/対応環境/単価/"
              "案件適合/確認点 を5〜7行で簡潔に。嘘・補完はしない（不明は『要確認』）。")
     user_p = f"# 対象案件のヒント\n{case_hint}\n\n# スキルシート抽出テキスト\n{joined}\n\n要約テキストのみ返す。"
@@ -315,8 +316,10 @@ def enrich_skillsheets(result, kept):
         uid = kept[c["src"]].get("uid")
         sheets = extract_skillsheets(msgs.get(uid))
         if sheets:
-            c["skillsheet_files"] = [fn for fn, _ in sheets]
+            c["skillsheet_files"] = [fn for fn, _, _ in sheets]
             c["skillsheet_summary"] = summarize_skillsheet(sheets, c.get("case", ""))
+            # 原本バイトは in-memory のみ保持（JSONには出さない・sales@下書きに添付）
+            c["_ss_files"] = [(fn, payload) for fn, _, payload in sheets if payload]
         else:
             c["skillsheet_note"] = "スキルシート添付なし（本文サマリーで判断）"
 
@@ -755,6 +758,25 @@ def build_draft_message(cand):
         msg["To"] = p["to"]
     msg["Subject"] = p["subject"]
     msg.set_content(prefix + p["body"])
+    # スキルシート原本(Excel/PDF)を下書きに添付（代表は下書きを開いて中身を確認→そのまま送信）
+    for fname, payload in cand.get("_ss_files", []) or []:
+        if not payload:
+            continue
+        low = (fname or "").lower()
+        if low.endswith(".pdf"):
+            maintype, subtype = "application", "pdf"
+        elif low.endswith(".xlsx"):
+            maintype, subtype = ("application",
+                                 "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        elif low.endswith(".xls"):
+            maintype, subtype = "application", "vnd.ms-excel"
+        else:
+            maintype, subtype = "application", "octet-stream"
+        try:
+            msg.add_attachment(payload, maintype=maintype, subtype=subtype,
+                               filename=(fname or "skillsheet"))
+        except Exception:  # noqa  添付失敗は下書き本体を止めない
+            pass
     return msg, []
 
 
@@ -838,8 +860,11 @@ def write_candidates_json(result, base_date):
     out_dir = os.path.join(HERE, "digests")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, f"candidates-{base_date.isoformat()}.json")
+    # アンダースコア始まりの内部フィールド（_ss_files のバイト等）はJSONに出さない
+    clean = [{k: v for k, v in c.items() if not k.startswith("_")}
+             for c in result.get("candidates", [])]
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"date": base_date.isoformat(), "candidates": result.get("candidates", [])},
+        json.dump({"date": base_date.isoformat(), "candidates": clean},
                   f, ensure_ascii=False, indent=2)
     return path
 

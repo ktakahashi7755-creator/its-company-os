@@ -242,15 +242,19 @@ def eval_drafts():
     # 宛先ありの候補
     c1 = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "A.N", "company": "ルートゼロ株式会社",
           "person": "伝刀", "to": "dento@routezero.example.co.jp", "src_subject": "NW A.N 20年", "likelihood": "中"}
+    c1["_ss_files"] = [("技術経歴書_A.N.xlsx", b"PK\x03\x04dummy")]
     m1, hard1 = R.build_draft_message(c1)
     chk("組み立て成功(宛先あり)", m1 is not None and not hard1)
     if m1 is not None:
         chk("From=sales@", m1["From"] == R.SALES_FROM)
         chk("To=担当アドレス", m1["To"] == "dento@routezero.example.co.jp")
         chk("件名 Re:…_ITS村山", (m1["Subject"] or "").startswith("Re:") and (m1["Subject"] or "").endswith("_ITS村山"))
-        body = m1.get_content()
+        bp = m1.get_body(preferencelist=("plain",))
+        body = bp.get_content() if bp is not None else ""
         chk("本文に案件本文", "大手遊技機メーカー向けに" in body)
         chk("REOorGA不在", R.REOORGA_ADDR not in m1.as_string())
+        atts = [p.get_filename() for p in m1.iter_attachments()]
+        chk("スキルシート原本を添付", "技術経歴書_A.N.xlsx" in atts)
     # 宛先未確定の候補 → To 空＋注記
     c2 = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "K.H", "company": "〇〇株式会社",
           "person": "", "to": "要・宛先確認", "likelihood": "高", "flags": ["年齢上限超・代表確認"]}
