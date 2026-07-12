@@ -571,9 +571,10 @@ def load_case_mail_block(case_hint=""):
 
 
 def load_signature():
-    """signature.md の ◇◆…◇◆ 署名ブロックを取り出す（メール末尾に差し込む正本）。"""
+    """signature.md の 上枠 ◇◆…◆◇ から 下枠 ◇◆…◆◇ までの署名ブロックを取り出す。
+    ※下枠は『◆◇』で終わる。以前 ◇◆.*◇◆ にしていたため下枠が『◇◆』で切れていた不具合を修正。"""
     text = read("signature.md") or ""
-    m = re.search(r"◇◆.*◇◆", text, re.S)
+    m = re.search(r"◇◆.*◆◇", text, re.S)   # 最後の ◆◇（下枠の末尾）まで取り切る
     return m.group(0).strip() if m else ""
 
 
