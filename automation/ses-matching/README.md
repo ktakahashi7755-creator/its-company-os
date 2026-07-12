@@ -40,7 +40,9 @@
 
 ```
 automation/ses-matching/
-├── README.md                 ← この手順書
+├── README.md                 ← この手順書（使い方）
+├── HANDOVER.md               ← 引き継ぎ・設計書の正本（設計/アカウント台帳/Secrets/復旧/バックアップ）★携帯が壊れても復元可能
+├── STATUS.md                 ← 稼働状況・残タスク（セッション跨ぎメモ）
 ├── sources.md                ← 配信ソース設定＋取り込みルール（REOorGA・5日鮮度）
 ├── scoring.md                ← 面談通過可能性の共通採点ルーブリック
 ├── notion-review.md          ← 代表レビュー面（Notion DB設計・ビュー・運用フロー）
