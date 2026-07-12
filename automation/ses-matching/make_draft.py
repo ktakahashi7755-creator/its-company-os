@@ -27,7 +27,7 @@ import os
 import sys
 
 # 同ディレクトリの共通エンジンを再利用（下書き確定・LLM・設定は一箇所に集約）
-from run_ses_matching import HERE, SALES_FROM, REOORGA_ADDR, finalize_draft
+from run_ses_matching import HERE, SALES_FROM, REOORGA_ADDR, finalize_draft, validate_draft
 
 
 def load_candidates(args):
@@ -99,6 +99,14 @@ def main():
 
     flags = "／".join(cand.get("flags", []) or [])
     draft = finalize_draft(cand, note=args.note)
+    # 安全網：ガードレール違反があれば一度だけ強い警告付きで作り直す
+    issues = validate_draft(draft, cand)
+    if issues:
+        draft = finalize_draft(
+            cand,
+            note=(args.note + "\n【厳守】From は " + SALES_FROM + " 固定。"
+                  + REOORGA_ADDR + " を本文・From・Toに絶対入れない。末尾に署名を必ず付ける。").strip())
+        issues = validate_draft(draft, cand)
 
     print("=" * 64)
     print(f"■ 送信可能な下書き： {cand.get('engineer','?')} × {cand.get('case','?')}"
@@ -108,6 +116,12 @@ def main():
     print("=" * 64)
     print(draft)
     print("=" * 64)
+    if issues:
+        print("🔴 ガードレール違反（送信不可・要修正）：")
+        for x in issues:
+            print(f"  - {x}")
+        print("  → この下書きは送らないでください。AI側で修正・再生成が必要です。")
+        print("=" * 64)
     print("■ 送信前チェック（代表・reply-template.md）")
     print(f"  [ ] From が ITSセールス（{SALES_FROM}）か／REOorGA（{REOORGA_ADDR}）になっていないか")
     print(f"  [ ] To が配信元担当のアドレスか（現在: {cand.get('to','要・宛先確認')}）")

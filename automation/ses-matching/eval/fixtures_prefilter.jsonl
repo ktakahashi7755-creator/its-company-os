@@ -1,0 +1,14 @@
+{"id":"P01","expect_pass":true,"note":"両刀案件・鮮度内","date":"2026-07-11","body":"【元請直】NW/セキュリティ支援。Cisco/F5設計、FW/UTM運用、脆弱性診断。恵比寿常駐。〜80万。"}
+{"id":"P02","expect_pass":true,"note":"両刀要員・鮮度内","date":"2026-07-12","body":"K.S 7年。Cisco・F5設計〜運用、脆弱性診断・FW/UTM運用。PLで体制課題洗い出し。希望90万。"}
+{"id":"P03","expect_pass":true,"note":"英語の両刀","date":"2026-07-10","body":"Network engineer with security experience: Cisco routing and firewall/IDS operations, vulnerability assessment."}
+{"id":"P04","expect_pass":true,"note":"YAMAHA/F5 + UTM/SOC 両刀","date":"2026-07-09","body":"YAMAHA/F5のNW、UTM/SOCのセキュリティ両刀。インフラ横断PL。希望95万。"}
+{"id":"P05","expect_pass":true,"note":"SOC標準語が単独で成立（過剰修正の回帰ガード）","date":"2026-07-11","body":"SOC構築とネットワーク設計。Cisco中心、脆弱性対応。常駐。"}
+{"id":"P06","expect_pass":true,"note":"IDS/IPS標準語が単独で成立（過剰修正の回帰ガード）","date":"2026-07-11","body":"L2/L3スイッチングとIDS/IPS運用。ネットワークとセキュリティ両面。"}
+{"id":"N01","expect_pass":false,"note":"純NW・Sec無し","date":"2026-07-11","body":"ネットワーク設計・構築。Cisco/Aruba中心。監視のみ。常駐。〜80万。"}
+{"id":"N02","expect_pass":false,"note":"純Web開発（領域不一致）","date":"2026-07-10","body":"自社SaaSのWebアプリ開発。React/Node.js/AWS。フロント〜API。〜75万。"}
+{"id":"N03","expect_pass":false,"note":"両刀だが鮮度8日超過","date":"2026-07-04","body":"NW/セキュリティ支援。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。〜80万。"}
+{"id":"N04","expect_pass":false,"note":"純Sec・NW語なし","date":"2026-07-11","body":"ファイアウォール/UTM運用とSOC監視の専任。脆弱性診断が主業務。"}
+{"id":"N05","expect_pass":false,"note":"誤爆トラップ：純NWだが英単語associateに'soc'（sec語なし）","date":"2026-07-11","body":"Network operations. YAMAHA/F5 switching. The associate handles daily tasks. Monitoring only."}
+{"id":"N06","expect_pass":false,"note":"誤爆トラップ：純NWだが英単語tipsに'ips'（sec語なし）","date":"2026-07-11","body":"Network construction with Cisco. Some routing tips for engineers. Operations only."}
+{"id":"N07","expect_pass":false,"note":"誤爆トラップ：純NWだがhybridsに'ids'（sec語なし）","date":"2026-07-11","body":"Network design with Cisco and Aruba, including hybrids of L2/L3 segments. Monitoring only."}
+{"id":"N08","expect_pass":false,"note":"純データセンター運用・両刀でない＋鮮度超過","date":"2026-07-03","body":"データセンター運用監視オペレータ。夜勤あり。〜45万。即日。"}

@@ -53,6 +53,7 @@ automation/ses-matching/
 ├── draft-on-demand.md        ← 指示出し→送信可能な下書き（チャット駆動）の手順書
 ├── run_ses_matching.py       ← 自動化本体（IMAP取込→採点→digest/Notion）※送信はしない
 ├── make_draft.py             ← 指示出し1件を送信可能な下書きに確定（チャット駆動）※送信はしない
+├── eval/                     ← 精度評価ハーネス（ラベル付き合成データ・precision/recall・退行検知）
 ├── examples/                 ← 動作確認サンプル（ダミー入力＋実行結果ダイジェスト）
 └── digests/                  ← 生成された日次ダイジェストの置き場
 ```

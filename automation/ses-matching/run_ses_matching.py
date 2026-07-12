@@ -353,6 +353,25 @@ def load_from_files(paths):
 
 
 # ---------- 段階①プレフィルタ（決定論・安価） ----------
+import functools
+
+
+@functools.lru_cache(maxsize=1024)
+def _kw_pattern(kw):
+    """ASCII語は語境界で一致させる（'soc'∈associate, 'ids'∈provides/besides, 'ips'∈tips 等の
+    substring誤爆を防ぎ、両刀プレフィルタの精度を上げる）。日本語（非ASCII）は語境界が無いため None。"""
+    k = kw.lower().strip()
+    if re.fullmatch(r"[a-z0-9][a-z0-9 .+_/-]*", k):
+        return re.compile(r"(?<![a-z0-9])" + re.escape(k) + r"(?![a-z0-9])")
+    return None
+
+
+def _kw_hit(kw, text_low):
+    """text_low（小文字化済み）に kw が含まれるか。ASCIIは語境界一致・日本語は部分一致。"""
+    pat = _kw_pattern(kw)
+    return (pat.search(text_low) is not None) if pat is not None else (kw.lower() in text_low)
+
+
 def prefilter(items, base_date, days):
     kept, dropped = [], []
     for it in items:
@@ -369,14 +388,14 @@ def prefilter(items, base_date, days):
             except ValueError:
                 pass
         low = (it["body"] + " " + it.get("subject", "")).lower()
-        # 広い門：どれか1語
+        # 広い門：どれか1語（ASCII語は語境界一致で誤爆を防ぐ）
         if reason is None and PREFILTER_KEYWORDS:
-            if not any(k.lower() in low for k in PREFILTER_KEYWORDS):
+            if not any(_kw_hit(k, low) for k in PREFILTER_KEYWORDS):
                 reason = "必須キーワード不一致"
         # 案件特化：各グループから最低1語（両刀など）
         if reason is None and PREFILTER_GROUPS:
             for gi, group in enumerate(PREFILTER_GROUPS):
-                if group and not any(k.lower() in low for k in group):
+                if group and not any(_kw_hit(k, low) for k in group):
                     reason = f"案件必須グループ{gi+1}不一致（両刀不成立等）"
                     break
         (dropped if reason else kept).append({**it, "drop_reason": reason})
@@ -408,8 +427,11 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
   candidates は 高/中 のみ（スキルで低いものは除外）。数稼ぎはしない。
 
 採点は scoring.md の100点ルーブリックに従い、面談通過可能性を 高/中/低 で出す。
+**各候補に breakdown（7軸の内訳）を必ず付ける。** 配点は scoring.md 準拠：
+必須30/鮮度15/単価15/商流15/タイミング10/見せ方10/継続5。**内訳の合計＝score** にする（監査可能性のため）。
 出力は必ず次のJSONのみ（前後に文章を付けない）:
 {{"candidates":[{{"src":0,"kind":"要員|案件","case":"案件名","engineer":"イニシャル","score":0,"likelihood":"高|中",
+"breakdown":{{"必須":0,"鮮度":0,"単価":0,"商流":0,"タイミング":0,"見せ方":0,"継続":0}},
 "tier":"①/②等","company":"配信元会社","person":"担当者名","to":"担当アドレス or 要・宛先確認",
 "summary":"要員/案件サマリー","reason":"通過根拠","concern":"懸念とフォロー","flags":["年齢上限超・代表確認 等"],
 "draft":"From/To/件名/本文/署名まで含む提案下書き全文"}}],
@@ -568,6 +590,29 @@ def finalize_draft(cand, note=""):
     return _call_llm(sys_p, user_p, json_mode=False).strip()
 
 
+def validate_draft(draft, cand=None):
+    """生成した下書きが送信ガードレールを破っていないか決定論でチェック（送信前の安全網）。
+    最重要：REOorGA受信アドレスが送信物に混入していないこと。違反リストを返す（空＝OK）。"""
+    issues = []
+    if not draft or not draft.strip():
+        return ["下書きが空"]
+    low = draft.lower()
+    m = re.search(r"^\s*from\s*[:：]\s*(.+)$", draft, re.I | re.M)
+    if m:
+        if SALES_FROM.lower() not in m.group(1).strip().lower():
+            issues.append(f"From が {SALES_FROM} でない（{m.group(1).strip()[:60]}）")
+    else:
+        issues.append("From 行が見つからない")
+    if REOORGA_ADDR.lower() in low:
+        issues.append(f"🔴 REOorGA受信アドレス({REOORGA_ADDR})が下書きに混入（送信物に出してはならない）")
+    to_m = re.search(r"^\s*to\s*[:：]\s*(.+)$", draft, re.I | re.M)
+    if to_m and REOORGA_ADDR.split("@")[-1].lower() in to_m.group(1).lower():
+        issues.append("🔴 宛先(To)がREOorGAドメイン（配信元担当のアドレスに直す）")
+    if "its-tokyo.com" not in low or "ITS合同会社" not in draft:
+        issues.append("署名ブロック（ITS合同会社／sales@its-tokyo.com）が見当たらない")
+    return issues
+
+
 def write_candidates_json(result, base_date):
     """指示出し（make_draft.py）から候補を選べるよう、候補を機械可読JSONで保存。
     候補者名・スキル要約を含むため gitignore 対象（digests/ 配下）。"""
@@ -581,6 +626,21 @@ def write_candidates_json(result, base_date):
 
 
 # ---------- 出力 ----------
+def _fmt_breakdown(c):
+    """7軸の内訳を『必須30/鮮度15/…（計93）』形式で。合計とscoreがズレたら⚠️で監査可能に。"""
+    bd = c.get("breakdown") or {}
+    if not bd:
+        return "（内訳なし）"
+    order = ["必須", "鮮度", "単価", "商流", "タイミング", "見せ方", "継続"]
+    parts = [f"{k}{bd[k]}" for k in order if k in bd]
+    total = sum(v for v in bd.values() if isinstance(v, (int, float)))
+    warn = ""
+    score = c.get("score")
+    if isinstance(score, (int, float)) and abs(total - score) > 1:
+        warn = f"　⚠️内訳計{total}≠score{score}（要確認）"
+    return " / ".join(parts) + f"（計{total}）" + warn
+
+
 def render_digest(result, base_date, kept, dropped):
     d = base_date.isoformat()
     lines = [f"# SES自動マッチング ダイジェスト（{d}）",
@@ -596,6 +656,7 @@ def render_digest(result, base_date, kept, dropped):
             lines += [
                 f"### {i}. {c.get('case','?')} × {c.get('engineer','?')}　── {c.get('score','?')}/100・面談通過可能性 {c.get('likelihood','?')}{flags}",
                 f"- 枠：{c.get('tier','-')}／配信元：{c.get('company','?')} {c.get('person','')}（To: {c.get('to','要・宛先確認')}）",
+                f"- 内訳：{_fmt_breakdown(c)}",
                 f"- サマリー：{c.get('summary','')}",
                 f"- 通過根拠：{c.get('reason','')}",
                 f"- 懸念・フォロー：{c.get('concern','')}",
