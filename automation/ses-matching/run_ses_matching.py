@@ -146,6 +146,7 @@ def fetch_imap(base_date, days):
     folder = _env("IMAP_FOLDER", "INBOX")
 
     since = (base_date - datetime.timedelta(days=days)).strftime("%d-%b-%Y")
+    max_fetch = int(_env("MAX_FETCH", "400"))  # 大量受信箱でも重くならない上限
     items = []
     M = imaplib.IMAP4_SSL(host, port)
     try:
@@ -153,6 +154,11 @@ def fetch_imap(base_date, days):
         M.select(folder, readonly=True)  # readonly＝受信箱を汚さない
         typ, data = M.search(None, f'(SINCE {since})')
         ids = data[0].split() if data and data[0] else []
+        total = len(ids)
+        if total > max_fetch:
+            ids = ids[-max_fetch:]  # 新しい順に最新 max_fetch 件だけ（IMAPは昇順なので末尾が最新）
+        print(f"[imap] {folder}: SINCE {since} で {total} 件ヒット → 最新 {len(ids)} 件を取得"
+              + (f"（上限{max_fetch}で {total-len(ids)} 件を今回はスキップ）" if total > max_fetch else ""))
         for num in ids:
             typ, msg_data = M.fetch(num, "(RFC822)")
             if typ != "OK" or not msg_data or not msg_data[0]:

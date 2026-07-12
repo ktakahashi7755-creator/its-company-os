@@ -28,6 +28,7 @@ jobs:
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}           # ★Secretsで渡す（コードに書かない）
           IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}                  # 任意（既定 INBOX / SES/REOorGA）
           FRESH_DAYS: ${{ vars.FRESH_DAYS }}                    # 任意（既定 5）
+          MAX_FETCH: ${{ vars.MAX_FETCH }}                      # 任意（既定 400・最新何件まで取得するか）
           SALES_FROM: ${{ vars.SALES_FROM }}                   # 任意（既定 sales@its-tokyo.com）
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}             # 任意（レビューDBへ投稿）
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
