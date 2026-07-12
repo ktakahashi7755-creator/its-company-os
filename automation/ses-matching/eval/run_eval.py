@@ -228,10 +228,77 @@ def eval_finalize():
     return ok == total
 
 
+def eval_drafts():
+    """sales@ 下書きへ入れる MIME メールの組み立て（build_draft_message）を検証（ネットワーク不要）。
+    From が sales@・件名 Re:○○_ITS村山・本文に案件本文・REOorGA不在。宛先未確定なら To 空＋注記。"""
+    print("── sales@下書きのMIME組み立て（build_draft_message・決定論・APIキー不要）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    # 宛先ありの候補
+    c1 = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "A.N", "company": "ルートゼロ株式会社",
+          "person": "伝刀", "to": "dento@routezero.example.co.jp", "src_subject": "NW A.N 20年", "likelihood": "中"}
+    m1, hard1 = R.build_draft_message(c1)
+    chk("組み立て成功(宛先あり)", m1 is not None and not hard1)
+    if m1 is not None:
+        chk("From=sales@", m1["From"] == R.SALES_FROM)
+        chk("To=担当アドレス", m1["To"] == "dento@routezero.example.co.jp")
+        chk("件名 Re:…_ITS村山", (m1["Subject"] or "").startswith("Re:") and (m1["Subject"] or "").endswith("_ITS村山"))
+        body = m1.get_content()
+        chk("本文に案件本文", "大手遊技機メーカー向けに" in body)
+        chk("REOorGA不在", R.REOORGA_ADDR not in m1.as_string())
+    # 宛先未確定の候補 → To 空＋注記
+    c2 = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "K.H", "company": "〇〇株式会社",
+          "person": "", "to": "要・宛先確認", "likelihood": "高", "flags": ["年齢上限超・代表確認"]}
+    m2, _ = R.build_draft_message(c2)
+    chk("組み立て成功(宛先未確定)", m2 is not None)
+    if m2 is not None:
+        chk("To空(要確認は入れない)", m2["To"] is None)
+        chk("本文に宛先未確定の注記", "宛先未確定" in m2.get_content())
+        chk("本文に代表確認フラグ", "代表確認" in m2.get_content())
+    print(f"   MIME組み立て 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
+def eval_notion():
+    """Notion候補ページの簡潔ブロック（_notion_blocks_from_result）を検証。
+    要約・マッチ度・スキルシート要約を含み、返信本文（縦に広がる原因）は含まないこと。"""
+    print("── Notion簡潔ブロック（_notion_blocks_from_result・決定論・APIキー不要）")
+    res = {"candidates": [{
+        "case": "遊技機メーカー NW/Sec 支援", "engineer": "A.N", "score": 65, "likelihood": "中", "tier": "①",
+        "company": "ルートゼロ株式会社", "person": "伝刀", "to": "要・宛先確認", "summary": "Azure20年",
+        "breakdown": {"必須": 18, "鮮度": 15, "単価": 12, "商流": 9, "タイミング": 7, "見せ方": 3, "継続": 1},
+        "skillsheet_summary": "Cisco/F5設計〜運用、脆弱性診断。", "skillsheet_files": ["技術経歴書_A.N.xlsx"],
+        "flags": ["年齢上限超・代表確認"],
+        "draft": "From: sales@its-tokyo.com\n件名: Re:X_ITS村山\n\nルートゼロ株式会社\n伝刀様\nITS営業部の村山でございます。\n▼案件\n大手遊技機メーカー向けに"}],
+        "excluded": [{"item": "M.R", "reason": "両刀足切り"}]}
+    blocks = R._notion_blocks_from_result(res)
+    allc = " ".join(b[b["type"]]["rich_text"][0]["text"]["content"]
+                    for b in blocks if b["type"] != "divider")
+    checks = [
+        ("スコア/マッチ度を含む", "65/100" in allc and "マッチ内訳" in allc),
+        ("サマリーを含む", "サマリー" in allc),
+        ("スキルシート要約＋ファイル名を含む", "技術経歴書_A.N.xlsx" in allc and "スキルシート" in allc),
+        ("返信本文を含まない(縦に広がらない)", "▼案件" not in allc and "村山でございます" not in allc),
+        ("代表確認フラグを表示", "年齢上限超・代表確認" in allc),
+        ("除外・低を含む", "両刀足切り" in allc),
+    ]
+    ok = sum(1 for _, c in checks if c)
+    for label, c in checks:
+        print(f"   {'✔' if c else '✗'} [{label}]")
+    print(f"   Notion簡潔ブロック 正解率： {ok}/{len(checks)} = {ok/len(checks):.2f}")
+    return ok == len(checks)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
-                    choices=["prefilter", "draft", "finalize", "contact", "dedup", "scoring", "all"],
+                    choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
+                             "dedup", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -242,6 +309,10 @@ def main():
         results.append(eval_draft())
     if args.stage in ("finalize", "all"):
         results.append(eval_finalize())
+    if args.stage in ("drafts", "all"):
+        results.append(eval_drafts())
+    if args.stage in ("notion", "all"):
+        results.append(eval_notion())
     if args.stage in ("contact", "all"):
         results.append(eval_contact())
     if args.stage in ("dedup", "all"):
