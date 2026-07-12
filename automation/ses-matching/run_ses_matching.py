@@ -45,13 +45,21 @@ from email.header import decode_header
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
+
+
+def _env(key, default=None):
+    """環境変数を読む。未設定 or 空文字（GitHub Actionsは未設定varを""で渡す）なら default。"""
+    v = os.environ.get(key)
+    return v if v not in (None, "") else default
+
+
 # LLMプロバイダ：OPENAI_API_KEY があれば openai、無ければ anthropic を既定に。LLM_PROVIDER で明示指定可。
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER") or ("openai" if os.environ.get("OPENAI_API_KEY") else "anthropic")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")          # 安価。必要なら gpt-4o 等に
-ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
-SALES_FROM = os.environ.get("SALES_FROM", "sales@its-tokyo.com")
-REOORGA_ADDR = os.environ.get("IMAP_USER", "contact@reorga.co.jp")
-FRESH_DAYS = int(os.environ.get("FRESH_DAYS", "5"))
+LLM_PROVIDER = _env("LLM_PROVIDER") or ("openai" if _env("OPENAI_API_KEY") else "anthropic")
+OPENAI_MODEL = _env("OPENAI_MODEL", "gpt-4o-mini")          # 安価。必要なら gpt-4o 等に
+ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+SALES_FROM = _env("SALES_FROM", "sales@its-tokyo.com")
+REOORGA_ADDR = _env("IMAP_USER", "contact@reorga.co.jp")
+FRESH_DAYS = int(_env("FRESH_DAYS", "5"))
 
 # 段階①のキーワード事前フィルタ（安価。案件がNW/Sec中心のため）。空にすれば全通過。
 PREFILTER_KEYWORDS = [
@@ -127,15 +135,15 @@ def fetch_imap(base_date, days):
     """受信専用アドレスから直近days日のメールを取得。読むだけ。"""
     import imaplib
 
-    host = os.environ.get("IMAP_HOST")
+    host = _env("IMAP_HOST")
     if not host:
         sys.exit("IMAP_HOST が未設定です（スマホ設定画面のサーバ名／--dry-run で回避可）。")
-    port = int(os.environ.get("IMAP_PORT", "993"))
+    port = int(_env("IMAP_PORT", "993"))
     user = REOORGA_ADDR
-    pw = os.environ.get("IMAP_PASSWORD")
+    pw = _env("IMAP_PASSWORD")
     if not pw:
         sys.exit("IMAP_PASSWORD が未設定です（GitHub Secrets で渡す。チャット/コードに書かない）。")
-    folder = os.environ.get("IMAP_FOLDER", "INBOX")
+    folder = _env("IMAP_FOLDER", "INBOX")
 
     since = (base_date - datetime.timedelta(days=days)).strftime("%d-%b-%Y")
     items = []
@@ -252,7 +260,7 @@ def _call_llm(system, user):
     if LLM_PROVIDER == "openai":
         from openai import OpenAI
 
-        if not os.environ.get("OPENAI_API_KEY"):
+        if not _env("OPENAI_API_KEY"):
             sys.exit("OPENAI_API_KEY が未設定です（--dry-run なら不要）。")
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         resp = client.chat.completions.create(
@@ -265,7 +273,7 @@ def _call_llm(system, user):
     # anthropic
     import anthropic
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not _env("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY（または OPENAI_API_KEY）が未設定です（--dry-run なら不要）。")
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     resp = client.messages.create(
