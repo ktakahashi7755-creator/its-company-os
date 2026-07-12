@@ -299,6 +299,29 @@ def eval_notion():
     return ok == len(checks)
 
 
+def eval_notiondb():
+    """Notion送信ステータスDBの行プロパティ生成（_db_row_props）を検証。決定論・APIキー不要。"""
+    import datetime as _dt
+    print("── Notion送信ステータスDBの行生成（_db_row_props・決定論）")
+    c = {"case": "遊技機 NW/Sec", "engineer": "KH", "score": 93, "likelihood": "高",
+         "age": "40歳", "company": "インテレクト", "person": "田中", "to": "tanaka@x.co.jp"}
+    p = R._db_row_props(c, _dt.date(2026, 7, 13))
+    checks = [
+        ("タイトル 案件×要員", p["案件×要員"]["title"][0]["text"]["content"] == "KH × 遊技機 NW/Sec"),
+        ("重複キー(rich_text)", p["キー"]["rich_text"][0]["text"]["content"] == R._its_key("遊技機 NW/Sec", "KH")),
+        ("スコア(number)", p["スコア"]["number"] == 93),
+        ("年齢", p["年齢"]["rich_text"][0]["text"]["content"] == "40歳"),
+        ("ステータス既定=未送信", p["ステータス"]["select"]["name"] == "未送信"),
+        ("日付", p["日付"]["date"]["start"] == "2026-07-13"),
+        ("score文字列でも数値化", R._db_row_props({"score": "77"}, _dt.date(2026, 7, 13))["スコア"]["number"] in (0, 77)),
+    ]
+    ok = sum(1 for _, x in checks if x)
+    for label, x in checks:
+        print(f"   {'✔' if x else '✗'} [{label}]")
+    print(f"   DB行生成 正解率： {ok}/{len(checks)} = {ok/len(checks):.2f}")
+    return ok == len(checks)
+
+
 def eval_robustness():
     """コードレビューで見つかった実バグの回帰テスト（H1/H3/L2/L3/M3）。決定論・APIキー不要。"""
     print("── 堅牢性の回帰テスト（レビュー指摘の修正・決定論）")
@@ -334,7 +357,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
-                             "dedup", "robustness", "scoring", "all"],
+                             "dedup", "robustness", "notiondb", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -355,6 +378,8 @@ def main():
         results.append(eval_dedup())
     if args.stage in ("robustness", "all"):
         results.append(eval_robustness())
+    if args.stage in ("notiondb", "all"):
+        results.append(eval_notiondb())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）
