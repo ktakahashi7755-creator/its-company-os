@@ -1,4 +1,6 @@
-# 生成ダイジェストはコミットしない（候補者名・連絡先を含むため）
+# 生成ダイジェスト・候補JSONはコミットしない（候補者名・連絡先・スキル要約を含むため）
 digest-*.md
+candidates-*.json
+proposed-log.jsonl
 !.gitignore
 !README.md
