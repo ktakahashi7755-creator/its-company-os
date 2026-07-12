@@ -33,6 +33,8 @@
 - **ソース**：REOorGA 配信アドレス（**後ほど接続**。現状メール系コネクタ未接続）→ 詳細 `sources.md`
 - **鮮度5日**：配信日から**5日以内の案件のみ**対象。超過は「他決リスク」で対象外。
 - **網羅**：対象ラベルの配信は取りこぼさず全確認。同一案件は名寄せして最新1件に集約。
+- **スキルシート（要員収集）**：Excel/PDF添付を原本保存（Notion添付/Drive）＋AIが**スキル要約**を生成。
+  個人情報のため**原本はgitにコミットしない**。詳細 `skillsheet-intake.md`。
 
 ## ファイル構成
 
@@ -42,6 +44,7 @@ automation/ses-matching/
 ├── sources.md                ← 配信ソース設定＋取り込みルール（REOorGA・5日鮮度）
 ├── scoring.md                ← 面談通過可能性の共通採点ルーブリック
 ├── notion-review.md          ← 代表レビュー面（Notion DB設計・ビュー・運用フロー）
+├── skillsheet-intake.md      ← スキルシート(Excel/PDF)の取り込み・要約・個人情報の扱い
 ├── 案件_YYYYMMDD_〇〇.md       ← 案件ごとの定義＋必須スキル（例：遊技機NWSec）
 ├── inbox-案件.example.md      ← 案件配信を貼る雛形（inbox-案件.md にコピー）
 ├── inbox-要員.example.md      ← 人材配信/自社プールを貼る雛形（inbox-要員.md にコピー）
