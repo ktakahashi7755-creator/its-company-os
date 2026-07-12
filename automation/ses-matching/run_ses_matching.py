@@ -910,8 +910,14 @@ def main():
             enrich_skillsheets(result, kept)
         except Exception as e:  # noqa  添付読込の失敗はダイジェスト全体を止めない
             print(f"[warn] スキルシート読込をスキップ: {e}")
-    backfill_contacts(result, kept)          # 宛先(To)の自動補完＋安全化（受信/ロール宛を防ぐ）
-    flag_duplicates(result, load_proposed())  # 既提案の 案件×要員 に重複フラグ
+    try:                                      # 宛先(To)の自動補完＋安全化（受信/ロール宛を防ぐ）
+        backfill_contacts(result, kept)
+    except Exception as e:  # noqa  実データの想定外でも本番(digest/Notion)を止めない
+        print(f"[warn] 宛先自動補完をスキップ: {e}")
+    try:                                      # 既提案の 案件×要員 に重複フラグ
+        flag_duplicates(result, load_proposed())
+    except Exception as e:  # noqa
+        print(f"[warn] 重複検知をスキップ: {e}")
     digest = render_digest(result, base_date, kept, dropped)
     path = write_digest(digest, base_date)
     # 指示出し（make_draft.py）で候補を選べるよう、機械可読JSONも残す（gitignore対象）
