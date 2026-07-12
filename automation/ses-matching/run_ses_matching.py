@@ -517,6 +517,69 @@ def score_with_llm(kept, dropped, base_date):
     return out
 
 
+# ---------- 下書き確定（指示出し→送信可能な下書き） ----------
+FINALIZE_SYSTEM = """あなたはITS合同会社 営業部の提案メール作成AI。代表が「この要員を出す」と選んだ1件について、
+配信元へ送る**送信可能な提案メール下書き**を、テンプレと署名に厳密に従って完成させる。
+
+厳守（ガードレール）:
+- From は必ず {sales_from}（ITSセールス固定）。REOorGA受信アドレス({reoorga})からは絶対に送らない。
+- To は与えられた宛先をそのまま使う。宛先が「要・宛先確認」等で不明なら、To 行は「要・宛先確認」のまま残し、
+  本文は完成させる（勝手にアドレスを創作しない）。
+- 資料に無い情報を捏造しない。単価・稼働開始・経験年数などが不明なら「要確認」と書く。
+- スキルシート要約がある場合はそれを最優先の根拠にする（本文サマリーより詳細）。
+- 属性（年齢・国籍等）は本文に書かない。フラグは代表確認事項として本文外で扱う。
+- 送信はしない（下書きのみ）。末尾に署名ブロックを必ず付ける。
+
+作法（reply-template.md 準拠・5点を簡潔に）:
+- 書き出しは「〔会社名〕 〔担当者名〕さま」。担当者名が不明なら「ご担当者さま」。
+- 本文は 1.誰を 2.なぜ合うか（案件必須要件への適合を具体で・両刀/設計構築運用/PL等） 3.単価 4.稼働可能日 5.スキルシート添付、の5点。
+- 面談1回・弊社同席前提でも問題ない旨を添える。
+- 代表からの補足指示（note）があれば反映する（例：単価を強調、商流を明記 等）。ただしガードレールは超えない。
+
+出力は **From/To/件名/本文/署名までを含むメール下書き全文のみ**（前後に解説を付けない）。"""
+
+
+def finalize_draft(cand, note=""):
+    """候補1件を、送信可能な提案メール下書きに確定する（reply-template＋署名＋スキルシート要約を使用）。
+    指示出し（make_draft.py）と、任意で日次実行の両方から呼べる共通エンジン。"""
+    template = read("reply-template.md") or ""
+    signature = read("signature.md") or ""
+    fields = {
+        "案件": cand.get("case", ""),
+        "枠": cand.get("tier", ""),
+        "要員イニシャル": cand.get("engineer", ""),
+        "配信元会社": cand.get("company", ""),
+        "担当者名": cand.get("person", ""),
+        "宛先(To)": cand.get("to", "要・宛先確認"),
+        "要員サマリー": cand.get("summary", ""),
+        "通過根拠": cand.get("reason", ""),
+        "懸念": cand.get("concern", ""),
+        "スキルシート要約": cand.get("skillsheet_summary", "") or "（添付なし・本文サマリーで作成）",
+    }
+    field_text = "\n".join(f"- {k}：{v}" for k, v in fields.items())
+    sys_p = FINALIZE_SYSTEM.format(sales_from=SALES_FROM, reoorga=REOORGA_ADDR)
+    user_p = (
+        f"# テンプレ（作法の正本）\n{template[:3500]}\n\n"
+        f"# 署名（末尾にそのまま付ける）\n{signature[:1200]}\n\n"
+        f"# この候補の確定材料\n{field_text}\n\n"
+        f"# 代表からの補足指示（あれば反映）\n{note or '（なし）'}\n\n"
+        f"上記から、送信可能な提案メール下書き全文のみを返してください。"
+    )
+    return _call_llm(sys_p, user_p, json_mode=False).strip()
+
+
+def write_candidates_json(result, base_date):
+    """指示出し（make_draft.py）から候補を選べるよう、候補を機械可読JSONで保存。
+    候補者名・スキル要約を含むため gitignore 対象（digests/ 配下）。"""
+    out_dir = os.path.join(HERE, "digests")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"candidates-{base_date.isoformat()}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"date": base_date.isoformat(), "candidates": result.get("candidates", [])},
+                  f, ensure_ascii=False, indent=2)
+    return path
+
+
 # ---------- 出力 ----------
 def render_digest(result, base_date, kept, dropped):
     d = base_date.isoformat()
@@ -686,6 +749,9 @@ def main():
             print(f"[warn] スキルシート読込をスキップ: {e}")
     digest = render_digest(result, base_date, kept, dropped)
     path = write_digest(digest, base_date)
+    # 指示出し（make_draft.py）で候補を選べるよう、機械可読JSONも残す（gitignore対象）
+    cj = write_candidates_json(result, base_date)
+    print(f"[ok] candidates -> {cj}")
     print("=" * 60)
     print(digest)
     print("=" * 60)

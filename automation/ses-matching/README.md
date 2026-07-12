@@ -50,7 +50,9 @@ automation/ses-matching/
 ├── inbox-要員.example.md      ← 人材配信/自社プールを貼る雛形（inbox-要員.md にコピー）
 ├── reply-template.md         ← ITSセールスからの提案下書きテンプレ＋送信前チェック
 ├── signature.md              ← 送信者名・署名の正本（村山愛／営業部）
+├── draft-on-demand.md        ← 指示出し→送信可能な下書き（チャット駆動）の手順書
 ├── run_ses_matching.py       ← 自動化本体（IMAP取込→採点→digest/Notion）※送信はしない
+├── make_draft.py             ← 指示出し1件を送信可能な下書きに確定（チャット駆動）※送信はしない
 ├── examples/                 ← 動作確認サンプル（ダミー入力＋実行結果ダイジェスト）
 └── digests/                  ← 生成された日次ダイジェストの置き場
 ```
@@ -68,8 +70,10 @@ automation/ses-matching/
    - `digests/digest-YYYYMMDD.md` に集約＋**sales@からの提案下書き**を生成
 3. 代表は**Notion「SES提案レビュー」の要確認ビュー**（またはダイジェスト1ファイル）を目視。
    本命に✓、見送りは理由を一言（採点の学習材料）。→ Notion設計は `notion-review.md`。
-4. ✓の案件×要員は、下書きを最終確認し、**ITSセールスから配信元へ個別に手動送信**。
-5. 結果（面談/見送り）を `../../data/pipeline.md` に反映。
+4. **指示出し**：代表がチャットで「〔案件〕×〔イニシャル〕 出して」と言うと、AIが `make_draft.py` で
+   **スキルシート込みの送信可能な下書き＋送信前チェック**を1件だけ確定生成する。→ `draft-on-demand.md`。
+5. 下書きを最終確認し、**ITSセールスから配信元へ個別に手動送信**（送信は常に代表・手動）。
+6. 結果（面談/見送り）を `../../data/pipeline.md` に反映。
 
 ## 自動化の実行（実装済み）
 
