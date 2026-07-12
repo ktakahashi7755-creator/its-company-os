@@ -210,6 +210,7 @@ def eval_finalize():
         ("担当者＋様", "伝刀様" in d),
         ("要員名＋様", "配信で頂きましたA.N様" in d),
         ("案件本文の固定挿入", "大手遊技機メーカー向けに" in d and "＝＝＝＝＝" in d),
+        ("末尾にITS村山の署名", "ITS合同会社 営業部　村山愛" in d and d.rstrip().endswith("◇◆")),
         ("面談可能日を尋ねる", "オンライン面談可能日" in d),
         ("ガードレール違反ゼロ", R.validate_draft(d) == []),
         ("REOorGA不在", R.REOORGA_ADDR not in d),

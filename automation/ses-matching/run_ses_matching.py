@@ -569,6 +569,13 @@ def load_case_mail_block(case_hint=""):
     return blocks[0][1]
 
 
+def load_signature():
+    """signature.md の ◇◆…◇◆ 署名ブロックを取り出す（メール末尾に差し込む正本）。"""
+    text = read("signature.md") or ""
+    m = re.search(r"◇◆.*◇◆", text, re.S)
+    return m.group(0).strip() if m else ""
+
+
 def reply_parts(cand, subject=None, company=None, person=None, engineer=None):
     """返信を『件名／宛先／本文』の部品で返す（決定論・テンプレ差し込み）。
     finalize_draft（テキスト表示）と save_drafts_to_sales（メール下書き）で共用する。"""
@@ -583,7 +590,8 @@ def reply_parts(cand, subject=None, company=None, person=None, engineer=None):
             .replace("{会社名}", comp)
             .replace("{担当者名}", pers)
             .replace("{要員名}", eng)
-            .replace("{案件本文}", case_body)).strip()
+            .replace("{案件本文}", case_body)
+            .replace("{署名}", load_signature())).strip()
     to = (cand.get("to") or "要・宛先確認").strip() or "要・宛先確認"
     return {"subject": f"Re:{subj}_ITS村山", "to": to, "body": body}
 
