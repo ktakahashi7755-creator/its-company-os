@@ -433,10 +433,10 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 {{"candidates":[{{"src":0,"kind":"要員|案件","case":"案件名","engineer":"イニシャル","score":0,"likelihood":"高|中",
 "breakdown":{{"必須":0,"鮮度":0,"単価":0,"商流":0,"タイミング":0,"見せ方":0,"継続":0}},
 "tier":"①/②等","company":"配信元会社","person":"担当者名","to":"担当アドレス or 要・宛先確認",
-"summary":"要員/案件サマリー","reason":"通過根拠","concern":"懸念とフォロー","flags":["年齢上限超・代表確認 等"],
-"draft":"From/To/件名/本文/署名まで含む提案下書き全文"}}],
+"summary":"要員/案件サマリー","reason":"通過根拠","concern":"懸念とフォロー","flags":["年齢上限超・代表確認 等"]}}],
 "excluded":[{{"item":"対象","reason":"除外理由"}}],
-"note":"全体所見"}}"""
+"note":"全体所見"}}
+※返信下書き(draft)はこのJSONに含めない。下書きは別工程（決定論テンプレ）で生成する。"""
 
 
 def _llm_once(system, user, json_mode):
@@ -775,8 +775,9 @@ def render_digest(result, base_date, kept, dropped):
             elif c.get("skillsheet_note"):
                 lines.append(f"- 📎 {c['skillsheet_note']}")
             lines += [
-                "- ▶ 提案下書き（承認後に手動送信）：",
-                "  > " + (c.get("draft", "").replace("\n", "\n  > ")),
+                "- ▶ 返信下書き（承認後に手動送信）↓",
+                "",
+                c.get("draft", ""),
                 "",
             ]
     if result.get("excluded"):
@@ -835,6 +836,41 @@ def post_notion_rows(result):
             print(f"[notion] error: {e}")
 
 
+def _notion_blocks_from_digest(text):
+    """digestテキストをNotionブロックに変換。見出し(##/###)は見出しブロックに、
+    本文は段落に。**blockquote記号『>』は除去**（Notionに『>』を出さない）。"""
+    def _para(content):
+        out = []
+        for i in range(0, len(content), 1900):
+            out.append({"object": "block", "type": "paragraph",
+                        "paragraph": {"rich_text": [{"type": "text", "text": {"content": content[i:i + 1900]}}]}})
+        return out
+
+    def _head(txt, kind):
+        return {"object": "block", "type": kind,
+                kind: {"rich_text": [{"type": "text", "text": {"content": txt[:1900]}}]}}
+
+    blocks, buf = [], []
+
+    def flush():
+        if buf:
+            blocks.extend(_para("\n".join(buf).strip("\n")))
+            buf.clear()
+
+    for raw in text.split("\n"):
+        line = re.sub(r"^[ \t]*>[ \t]?", "", raw)   # 行頭のblockquote記号『>』を除去
+        if line.startswith("### "):
+            flush(); blocks.append(_head(line[4:], "heading_3"))
+        elif line.startswith("## "):
+            flush(); blocks.append(_head(line[3:], "heading_2"))
+        elif line.startswith("# "):
+            flush(); blocks.append(_head(line[2:], "heading_1"))
+        else:
+            buf.append(line)
+    flush()
+    return blocks[:95]
+
+
 def post_notion_page(digest_text, base_date):
     """NOTION_PAGE_ID(親ページ)配下に、その日の候補ページ『SES候補 YYYY-MM-DD』を作成して本文を書く。
     DBが無くてもNotionに自動反映できる簡易ルート（親ページを1つ用意＋共有するだけ）。"""
@@ -844,10 +880,8 @@ def post_notion_page(digest_text, base_date):
         return
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
                "Notion-Version": "2022-06-28"}
-    body = digest_text
-    chunks = [body[i:i + 1900] for i in range(0, len(body), 1900)][:95] or [""]
-    children = [{"object": "block", "type": "paragraph",
-                 "paragraph": {"rich_text": [{"type": "text", "text": {"content": c}}]}} for c in chunks]
+    children = _notion_blocks_from_digest(digest_text) or [
+        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": []}}]
     payload = {
         "parent": {"page_id": parent},
         "properties": {"title": {"title": [{"text": {"content": f"SES候補 {base_date.isoformat()}"}}]}},
@@ -923,6 +957,11 @@ def main():
         flag_duplicates(result, load_proposed())
     except Exception as e:  # noqa
         print(f"[warn] 重複検知をスキップ: {e}")
+    for c in result.get("candidates", []):    # 返信下書きを決定論テンプレで統一生成（LLM不使用・無料）
+        try:
+            c["draft"] = finalize_draft(c)
+        except Exception as e:  # noqa
+            c["draft"] = f"（下書き生成に失敗: {e}）"
     digest = render_digest(result, base_date, kept, dropped)
     path = write_digest(digest, base_date)
     # 指示出し（make_draft.py）で候補を選べるよう、機械可読JSONも残す（gitignore対象）
