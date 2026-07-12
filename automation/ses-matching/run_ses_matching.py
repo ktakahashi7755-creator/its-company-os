@@ -780,6 +780,29 @@ def build_draft_message(cand):
     return msg, []
 
 
+def _detect_drafts_folder(M):
+    """下書きフォルダ名を自動検出。まず IMAP SPECIAL-USE の \\Drafts フラグ、無ければ定番名を試す。
+    サーバ差（lolipop=INBOX.Drafts / Gmail=[Gmail]/Drafts 等）を代表に意識させないため。"""
+    try:
+        typ, data = M.list()
+        if typ == "OK" and data:
+            for d in data:
+                ln = d.decode("utf-8", "ignore") if isinstance(d, bytes) else str(d)
+                if "\\Drafts" in ln:
+                    m = re.search(r'"([^"]+)"\s*$', ln) or re.search(r'(\S+)\s*$', ln)
+                    if m:
+                        return m.group(1)
+    except Exception:  # noqa
+        pass
+    for name in ("Drafts", "INBOX.Drafts", "[Gmail]/Drafts", "下書き", "INBOX.下書き"):
+        try:
+            if M.select(name, readonly=True)[0] == "OK":
+                return name
+        except Exception:  # noqa
+            pass
+    return "Drafts"
+
+
 def save_drafts_to_sales(result, base_date):
     """マッチした候補（高/中）の返信下書きを sales@ の下書きフォルダに IMAP APPEND で保存。
     **送信は一切しない**（\\Draft フラグ・下書き保存のみ）。同一(案件,要員)は重複作成しない。
@@ -787,7 +810,6 @@ def save_drafts_to_sales(result, base_date):
     host = _env("SALES_IMAP_HOST")
     pw = _env("SALES_IMAP_PASSWORD")
     user = _env("SALES_IMAP_USER", SALES_FROM)
-    folder = _env("SALES_DRAFTS_FOLDER", "Drafts")
     if not (host and pw):
         print("[drafts] SALES_IMAP_HOST/PASSWORD 未設定のため下書き保存はスキップ（Secret登録で有効化）")
         return
@@ -802,9 +824,12 @@ def save_drafts_to_sales(result, base_date):
         print("[drafts] 新規の下書きなし（全て作成済み or 候補なし）")
         return
     saved = skipped = 0
+    folder = _env("SALES_DRAFTS_FOLDER") or "Drafts"   # ログイン失敗時の既定（最後のログ用）
     M = imaplib.IMAP4_SSL(host, int(_env("SALES_IMAP_PORT", "993")))
     try:
         M.login(user, pw)
+        folder = _env("SALES_DRAFTS_FOLDER") or _detect_drafts_folder(M)
+        print(f"[drafts] 下書きフォルダ: {folder}")
         for c in targets:
             msg, hard = build_draft_message(c)
             if msg is None:
