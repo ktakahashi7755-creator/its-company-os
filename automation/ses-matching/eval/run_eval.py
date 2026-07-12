@@ -249,7 +249,8 @@ def eval_drafts():
         chk("From=sales@", m1["From"] == R.SALES_FROM)
         chk("To=担当アドレス", m1["To"] == "dento@routezero.example.co.jp")
         chk("件名 Re:…_ITS村山", (m1["Subject"] or "").startswith("Re:") and (m1["Subject"] or "").endswith("_ITS村山"))
-        body = m1.get_content()
+        bp = m1.get_body(preferencelist=("plain",))
+        body = bp.get_content() if bp is not None else ""
         chk("本文に案件本文", "大手遊技機メーカー向けに" in body)
         chk("REOorGA不在", R.REOORGA_ADDR not in m1.as_string())
         atts = [p.get_filename() for p in m1.iter_attachments()]
