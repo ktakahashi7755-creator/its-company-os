@@ -49,6 +49,7 @@ automation/ses-matching/
 ├── inbox-案件.example.md      ← 案件配信を貼る雛形（inbox-案件.md にコピー）
 ├── inbox-要員.example.md      ← 人材配信/自社プールを貼る雛形（inbox-要員.md にコピー）
 ├── reply-template.md         ← ITSセールスからの提案下書きテンプレ＋送信前チェック
+├── signature.md              ← 送信者名・署名の正本（村山愛／営業部）
 ├── examples/                 ← 動作確認サンプル（ダミー入力＋実行結果ダイジェスト）
 └── digests/                  ← 生成された日次ダイジェストの置き場
 ```
