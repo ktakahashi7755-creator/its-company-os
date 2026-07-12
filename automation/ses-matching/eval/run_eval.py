@@ -50,7 +50,7 @@ def eval_prefilter():
     tp = fp = fn = tn = 0
     misses = []
     for row in rows:
-        items = [{"from_name": "", "from_addr": "", "subject": "",
+        items = [{"from_name": "", "from_addr": "", "subject": row.get("subject", ""),
                   "date": row["date"], "body": row["body"]}]
         kept, _ = R.prefilter(items, BASE_DATE, R.FRESH_DAYS)
         passed = bool(kept)
@@ -139,9 +139,57 @@ def eval_draft():
     return ok == len(DRAFT_CASES)
 
 
+CONTACT_CASES = [
+    # (ラベル, from_addr, body, 期待To)
+    ("署名の担当アドレスを採用", "dist@reorga.co.jp",
+     "案件のご案内です。\nインテレクト株式会社 田中\ntanaka@intellect.co.jp", "tanaka@intellect.co.jp"),
+    ("REOorGA宛は使わない→要確認", "contact@reorga.co.jp",
+     "配信専用アドレスからのご案内。返信は contact@reorga.co.jp まで。", "要・宛先確認"),
+    ("noreplyは宛先にしない→要確認", "noreply@reorga.co.jp",
+     "no-reply@service.example.com 宛には返信しないでください。", "要・宛先確認"),
+    ("本文に担当なし・from_addrが会社直→from_addr採用", "tanaka@intellect.co.jp",
+     "案件のご案内です。詳細は添付。", "tanaka@intellect.co.jp"),
+    ("複数ドメインで曖昧→要確認", "dist@reorga.co.jp",
+     "田中 tanaka@intellect.co.jp / 佐藤 sato@routezero.co.jp", "要・宛先確認"),
+    ("自社アドレスis除外・会社直を採用", "dist@reorga.co.jp",
+     "担当 田中 tanaka@intellect.co.jp（弊社 sales@its-tokyo.com ではない）", "tanaka@intellect.co.jp"),
+]
+
+
+def eval_contact():
+    print("── 宛先(To)自動抽出（extract_contact・決定論・APIキー不要）")
+    ok = 0
+    for label, frm, body, want in CONTACT_CASES:
+        got = R.extract_contact(frm, body, "")["to"]
+        hit = got == want
+        ok += 1 if hit else 0
+        print(f"   {'✔' if hit else '✗'} [{label}] 期待={want} 実際={got}")
+    print(f"   宛先抽出 正解率： {ok}/{len(CONTACT_CASES)} = {ok/len(CONTACT_CASES):.2f}")
+    return ok == len(CONTACT_CASES)
+
+
+def eval_dedup():
+    print("── 既提案の重複検知（flag_duplicates・決定論・APIキー不要）")
+    seen = {("遊技機メーカー NW/Sec", "KH")}
+    result = {"candidates": [
+        {"case": "遊技機メーカー NW/Sec", "engineer": "KH", "flags": []},   # 既提案→フラグ付くべき
+        {"case": "遊技機メーカー NW/Sec", "engineer": "TY", "flags": []},   # 新規→付かない
+    ]}
+    R.flag_duplicates(result, seen)
+    c0, c1 = result["candidates"]
+    hit0 = "既提案・重複" in c0["flags"]
+    hit1 = "既提案・重複" not in c1["flags"]
+    for c, ok_, lbl in ((c0, hit0, "既提案KHにフラグ"), (c1, hit1, "新規TYは無フラグ")):
+        print(f"   {'✔' if ok_ else '✗'} [{lbl}] flags={c['flags']}")
+    print(f"   重複検知 正解率： {int(hit0)+int(hit1)}/2 = {(int(hit0)+int(hit1))/2:.2f}")
+    return hit0 and hit1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", choices=["prefilter", "draft", "scoring", "all"], default="prefilter")
+    ap.add_argument("--stage",
+                    choices=["prefilter", "draft", "contact", "dedup", "scoring", "all"],
+                    default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
     results = []
@@ -149,6 +197,10 @@ def main():
         results.append(eval_prefilter())
     if args.stage in ("draft", "all"):
         results.append(eval_draft())
+    if args.stage in ("contact", "all"):
+        results.append(eval_contact())
+    if args.stage in ("dedup", "all"):
+        results.append(eval_dedup())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）

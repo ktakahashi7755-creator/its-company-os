@@ -590,6 +590,108 @@ def finalize_draft(cand, note=""):
     return _call_llm(sys_p, user_p, json_mode=False).strip()
 
 
+# ---------- 宛先(To)の自動抽出（保守的・送信ガードレール内蔵） ----------
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+# 宛先に使ってはいけないローカル部（自動送信/リスト/ロール系）
+ROLE_HINTS = ("noreply", "no-reply", "no_reply", "donotreply", "do-not-reply", "mailer-daemon",
+              "postmaster", "majordomo", "listserv", "bounce", "mailmag", "magazine",
+              "newsletter", "unsubscribe", "mailmagazine", "auto-", "automail")
+
+
+def _is_sendable_addr(addr):
+    """提案の宛先に使ってよいアドレスか。REOorGA(受信専用)・自社送信元・ロール系は不可。"""
+    a = (addr or "").strip().lower()
+    if "@" not in a:
+        return False
+    local, dom = a.rsplit("@", 1)
+    if dom.endswith("reorga.co.jp"):        # 受信専用プラットフォーム＝絶対に送らない
+        return False
+    if "its-tokyo.com" in dom:              # 自社の送信元＝宛先ではない
+        return False
+    if any(h in local for h in ROLE_HINTS):  # noreply/リスト/自動配信は宛先にしない
+        return False
+    return True
+
+
+def extract_contact(from_addr="", body="", subject=""):
+    """配信メールから提案の宛先(To)候補を**保守的に**抽出する。
+    - REOorGA/自社/ロール系は除外。確信が持てなければ '要・宛先確認'（誤送信より安全側）。
+    - 送信可能アドレスが複数ドメインにまたがる場合は曖昧として '要・宛先確認'。
+    返り値: {"to", "found"(全アドレス), "sendable"(送信可能のみ)}"""
+    found = []
+    for m in EMAIL_RE.findall(f"{body}\n{subject}"):
+        if m not in found:
+            found.append(m)
+    sendable = [a for a in found if _is_sendable_addr(a)]
+    to = "要・宛先確認"
+    if sendable:
+        domains = {a.rsplit("@", 1)[1].lower() for a in sendable}
+        to = sendable[-1] if len(domains) == 1 else "要・宛先確認"  # 単一ドメインなら署名末尾を採用
+    elif _is_sendable_addr(from_addr):
+        to = from_addr.strip()
+    return {"to": to, "found": found, "sendable": sendable}
+
+
+def backfill_contacts(result, kept):
+    """候補の To を自動補完＋安全化。LLMが具体アドレスを入れていても、REOorGA/ロール系なら
+    抽出器で上書き（＝データ層でも受信アドレスへの送信を防ぐ）。"""
+    for c in result.get("candidates", []):
+        cur = (c.get("to") or "").strip()
+        if "@" in cur and _is_sendable_addr(cur):
+            continue  # LLMが妥当な担当アドレスを入れている
+        src = c.get("src")
+        if isinstance(src, int) and 0 <= src < len(kept):
+            it = kept[src]
+            info = extract_contact(it.get("from_addr", ""), it.get("body", ""), it.get("subject", ""))
+            c["to"] = info["to"]
+            if info["found"]:
+                c["to_found"] = info["found"]
+        elif not cur:
+            c["to"] = "要・宛先確認"
+
+
+# ---------- 既提案の重複検知（同一 案件×要員 の再提案を防ぐ） ----------
+def _dupe_key(case, engineer):
+    return (str(case or "").strip(), str(engineer or "").strip())
+
+
+def load_proposed():
+    """既提案ログ（digests/proposed-log.jsonl・gitignore）から (案件,要員) 集合を読む。"""
+    path = os.path.join(HERE, "digests", "proposed-log.jsonl")
+    seen = set()
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    seen.add(_dupe_key(r.get("case"), r.get("engineer")))
+                except json.JSONDecodeError:
+                    continue
+    return seen
+
+
+def append_proposed(case, engineer, date_str):
+    """提案（下書き確定＝送る意図）を既提案ログに追記。"""
+    path = os.path.join(HERE, "digests", "proposed-log.jsonl")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"date": date_str, "case": case, "engineer": engineer},
+                           ensure_ascii=False) + "\n")
+
+
+def flag_duplicates(result, seen):
+    """既提案の (案件,要員) に一致する候補へ『既提案・重複』フラグを立てる（純粋関数・除外はしない）。"""
+    for c in result.get("candidates", []):
+        if _dupe_key(c.get("case"), c.get("engineer")) in seen:
+            flags = c.setdefault("flags", [])
+            if "既提案・重複" not in flags:
+                flags.append("既提案・重複")
+    return result
+
+
 def validate_draft(draft, cand=None):
     """生成した下書きが送信ガードレールを破っていないか決定論でチェック（送信前の安全網）。
     最重要：REOorGA受信アドレスが送信物に混入していないこと。違反リストを返す（空＝OK）。"""
@@ -808,6 +910,8 @@ def main():
             enrich_skillsheets(result, kept)
         except Exception as e:  # noqa  添付読込の失敗はダイジェスト全体を止めない
             print(f"[warn] スキルシート読込をスキップ: {e}")
+    backfill_contacts(result, kept)          # 宛先(To)の自動補完＋安全化（受信/ロール宛を防ぐ）
+    flag_duplicates(result, load_proposed())  # 既提案の 案件×要員 に重複フラグ
     digest = render_digest(result, base_date, kept, dropped)
     path = write_digest(digest, base_date)
     # 指示出し（make_draft.py）で候補を選べるよう、機械可読JSONも残す（gitignore対象）

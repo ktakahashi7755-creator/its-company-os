@@ -12,3 +12,7 @@
 {"id":"N06","expect_pass":false,"note":"誤爆トラップ：純NWだが英単語tipsに'ips'（sec語なし）","date":"2026-07-11","body":"Network construction with Cisco. Some routing tips for engineers. Operations only."}
 {"id":"N07","expect_pass":false,"note":"誤爆トラップ：純NWだがhybridsに'ids'（sec語なし）","date":"2026-07-11","body":"Network design with Cisco and Aruba, including hybrids of L2/L3 segments. Monitoring only."}
 {"id":"N08","expect_pass":false,"note":"純データセンター運用・両刀でない＋鮮度超過","date":"2026-07-03","body":"データセンター運用監視オペレータ。夜勤あり。〜45万。即日。"}
+{"id":"B01","expect_pass":true,"note":"鮮度ちょうど5日＝境界（通過するべき）","date":"2026-07-07","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
+{"id":"B02","expect_pass":false,"note":"鮮度6日＝境界の外（除外するべき）","date":"2026-07-06","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
+{"id":"B03","expect_pass":true,"note":"件名だけに両刀語（本文は薄い）","date":"2026-07-11","subject":"【募集】ネットワーク兼セキュリティ Cisco/FW/脆弱性","body":"詳細は添付のとおり。ご確認ください。"}
+{"id":"B04","expect_pass":true,"note":"大文字混在（CISCO/FIREWALL）でも成立","date":"2026-07-10","body":"NETWORK design with CISCO and FIREWALL/IDS operations. VULNERABILITY assessment included."}

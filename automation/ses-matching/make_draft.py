@@ -27,7 +27,8 @@ import os
 import sys
 
 # 同ディレクトリの共通エンジンを再利用（下書き確定・LLM・設定は一箇所に集約）
-from run_ses_matching import HERE, SALES_FROM, REOORGA_ADDR, finalize_draft, validate_draft
+from run_ses_matching import (HERE, SALES_FROM, REOORGA_ADDR, finalize_draft, validate_draft,
+                              load_proposed, append_proposed, _dupe_key)
 
 
 def load_candidates(args):
@@ -77,6 +78,8 @@ def main():
     ap.add_argument("--date", default=None, help="candidates-YYYYMMDD.json の日付")
     ap.add_argument("--json", default=None, help="候補JSONのパスを明示")
     ap.add_argument("--candidate-json", default=None, help="候補1件のJSONを直接渡す")
+    ap.add_argument("--date-str", default=None, help="既提案ログに残す日付（省略時は候補JSONのdate）")
+    ap.add_argument("--no-log", action="store_true", help="既提案ログに記録しない（下書き試作のみ）")
     args = ap.parse_args()
 
     cands = load_candidates(args)
@@ -97,6 +100,9 @@ def main():
             for i, c in enumerate(ordered))
         sys.exit(f"--pick で1件選んでください。候補:\n{listing}")
 
+    # 既提案チェック（同一 案件×要員 を二重に出さない）
+    dup = _dupe_key(cand.get("case"), cand.get("engineer")) in load_proposed()
+
     flags = "／".join(cand.get("flags", []) or [])
     draft = finalize_draft(cand, note=args.note)
     # 安全網：ガードレール違反があれば一度だけ強い警告付きで作り直す
@@ -113,6 +119,8 @@ def main():
           f"（{cand.get('score','?')}点・面談通過可能性 {cand.get('likelihood','?')}）")
     if flags:
         print(f"⚠️ 代表確認フラグ： {flags}")
+    if dup:
+        print("⚠️ 既提案・重複： この 案件×要員 は過去に提案済みです（proposed-log）。二重提案に注意。")
     print("=" * 64)
     print(draft)
     print("=" * 64)
@@ -130,6 +138,12 @@ def main():
     if flags:
         print(f"  [ ] 属性フラグ（{flags}）を代表判断済みか")
     print("  → OKなら sales@ から手動送信。結果は data/pipeline.md へ。")
+
+    # 提案の意図として既提案ログに記録（違反が残る下書き・--no-log時は記録しない）
+    if not args.no_log and not issues and not dup:
+        date_str = args.date_str or args.date or "unknown"
+        append_proposed(cand.get("case", ""), cand.get("engineer", ""), date_str)
+        print("  （既提案ログに記録しました。次回以降この組は『既提案・重複』で警告されます）")
 
 
 if __name__ == "__main__":

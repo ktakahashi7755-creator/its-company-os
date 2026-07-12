@@ -22,6 +22,8 @@ python eval/run_eval.py --stage all
 |---|---|---|---|
 | prefilter | precision / recall / F1 | 不要 | 両刀プレフィルタの誤通過（純NWの混入）・誤除外を潰す |
 | draft | 違反検知の正解率 | 不要 | 生成下書きのガードレール違反（REOorGA混入・From違反・署名欠落）を確実に捕捉 |
+| contact | 宛先抽出の正解率 | 不要 | 宛先(To)自動抽出が担当アドレスを拾い、REOorGA/noreply/曖昧は「要確認」にするか |
+| dedup | 重複検知の正解率 | 不要 | 既提案の 案件×要員 に重複フラグが立つか |
 | scoring | 帯一致率（高/中/除外/flag） | 要 | LLM採点が scoring.md 通りに 足切り・帯分けするか |
 
 ## 改善履歴（測定値つき）
@@ -33,6 +35,10 @@ python eval/run_eval.py --stage all
   署名欠落を決定論で検知（6/6）。`make_draft.py` は違反時に一度作り直し、残れば送信不可表示。
 - **2026-07-12 R3｜採点の監査可能化**：LLM採点に7軸 breakdown を必須化。内訳計とscoreのズレを
   ダイジェストで⚠️表示（説明可能なスコア）。※LLM段はキーが要るため本環境では未実走（設定済み）。
+- **2026-07-12 R4｜宛先自動化＋重複防止**：`extract_contact`（宛先6/6）で担当アドレスを保守的に抽出し、
+  REOorGA/noreply/複数ドメインは「要・宛先確認」に倒す。`backfill_contacts` はLLMがreorga宛を入れても
+  データ層で安全化。`flag_duplicates`（2/2）で既提案の再掲を警告。プレフィルタは境界・件名一致・大文字
+  混在を追加し **18ケースで F1 1.00 維持**。eval gate を `--stage all` に統一。
 
 ## フィクスチャの足し方
 
