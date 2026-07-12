@@ -166,11 +166,17 @@ def fetch_imap(base_date, days):
     chunk = int(_env("IMAP_CHUNK", "100"))        # まとめ取り件数（往復を減らす）
     items = []
     tmo = int(_env("IMAP_TIMEOUT", "30"))
+    M = None
     try:                                             # 接続/ログイン/選択の失敗で run 全体を落とさない（H2）
         M = imaplib.IMAP4_SSL(host, port, timeout=tmo)
         M.login(user, pw)
         M.select(folder, readonly=True)  # readonly＝受信箱を汚さない
     except Exception as e:  # noqa
+        if M is not None:
+            try:
+                M.logout()   # 確立済みソケットを閉じる（リーク防止）
+            except Exception:  # noqa
+                pass
         print(f"[imap] 受信接続に失敗（IMAP_HOST/PASSWORD/到達性を確認）: {e} → 空で継続")
         return items
     try:
@@ -232,11 +238,17 @@ def fetch_full_by_uids(uids):
     port = int(_env("IMAP_PORT", "993"))
     folder = _env("IMAP_FOLDER", "INBOX")
     out = {}
+    M = None
     try:
         M = imaplib.IMAP4_SSL(host, port, timeout=int(_env("IMAP_TIMEOUT", "30")))
         M.login(REOORGA_ADDR, pw)
         M.select(folder, readonly=True)
     except Exception as e:  # noqa  スキルシート再取得の失敗は要約なしで継続
+        if M is not None:
+            try:
+                M.logout()
+            except Exception:  # noqa
+                pass
         print(f"[warn] スキルシート再取得の接続に失敗: {e}")
         return out
     try:
@@ -559,6 +571,8 @@ def score_with_llm(kept, dropped, base_date):
         if ci < n_chunks - 1:
             time.sleep(3)  # バッチ間で軽く間隔（レート制限緩和）
     # LLMは score/src を文字列で返すことがある。数値に正規化しないと sorted() 等がクラッシュする（H1）。
+    cands = [c for c in cands if isinstance(c, dict)]     # 万一dict以外が来ても落とさない
+    excl = [e for e in excl if isinstance(e, dict)]
     for c in cands:
         try:
             c["score"] = int(float(c.get("score") or 0))
