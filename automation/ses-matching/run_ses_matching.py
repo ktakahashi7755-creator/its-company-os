@@ -566,11 +566,9 @@ def load_case_mail_block(case_hint=""):
     return blocks[0][1]
 
 
-def finalize_draft(cand, note="", subject=None, company=None, person=None, engineer=None):
-    """候補1件を、配信元への『案件ご紹介』返信下書きに**決定論で**確定する（LLM不使用・テンプレ差し込み）。
-    代表の型：配信で来た要員に対し、こちらの案件を提示し、面談可能日・最新の並行状況を尋ねる。
-    変数＝①件名 ②配信元会社 ③担当者名 ＋ 要員名。案件本文は案件定義の MAIL-BLOCK から固定挿入。
-    引数の subject/company/person/engineer が渡ればそれを最優先（代表がチャットで指定した値）。"""
+def reply_parts(cand, subject=None, company=None, person=None, engineer=None):
+    """返信を『件名／宛先／本文』の部品で返す（決定論・テンプレ差し込み）。
+    finalize_draft（テキスト表示）と save_drafts_to_sales（メール下書き）で共用する。"""
     tmpl = read("reply-template.txt") or ""
     subj = _fmt_reply_subject(subject if subject is not None
                               else (cand.get("src_subject") or cand.get("case", "")))
@@ -579,13 +577,20 @@ def finalize_draft(cand, note="", subject=None, company=None, person=None, engin
     eng = (engineer if engineer is not None else cand.get("engineer", "")).strip() or "ご紹介要員"
     case_body = load_case_mail_block(cand.get("case", ""))
     body = (tmpl
-            .replace("{件名}", subj)
             .replace("{会社名}", comp)
             .replace("{担当者名}", pers)
             .replace("{要員名}", eng)
             .replace("{案件本文}", case_body)).strip()
     to = (cand.get("to") or "要・宛先確認").strip() or "要・宛先確認"
-    draft = f"From: {SALES_FROM}\nTo: {to}\n{body}"
+    return {"subject": f"Re:{subj}_ITS村山", "to": to, "body": body}
+
+
+def finalize_draft(cand, note="", subject=None, company=None, person=None, engineer=None):
+    """候補1件を、配信元への『案件ご紹介』返信下書き（From/To/件名/本文）に**決定論で**確定する。
+    代表の型：配信で来た要員に対し、こちらの案件を提示し、面談可能日・最新の並行状況を尋ねる。
+    変数＝①件名 ②配信元会社 ③担当者名 ＋ 要員名。案件本文は案件定義の MAIL-BLOCK から固定挿入。"""
+    p = reply_parts(cand, subject, company, person, engineer)
+    draft = f"From: {SALES_FROM}\nTo: {p['to']}\n件名: {p['subject']}\n\n{p['body']}"
     if note:
         draft += f"\n\n【代表の補足指示メモ（送信前に反映/削除）】{note}"
     return draft
@@ -694,6 +699,113 @@ def flag_duplicates(result, seen):
             if "既提案・重複" not in flags:
                 flags.append("既提案・重複")
     return result
+
+
+# ---------- sales@ の下書き(Drafts)へ自動投入（IMAP APPEND・送信はしない） ----------
+def _drafts_log_path():
+    return os.path.join(HERE, "digests", "drafts-log.jsonl")
+
+
+def load_drafted():
+    """既に sales@ 下書きに入れた (案件,要員) 集合（重複作成を防ぐ・gitignore）。"""
+    seen = set()
+    path = _drafts_log_path()
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    seen.add(_dupe_key(r.get("case"), r.get("engineer")))
+                except json.JSONDecodeError:
+                    continue
+    return seen
+
+
+def append_drafted(case, engineer, date_str):
+    path = _drafts_log_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"date": date_str, "case": case, "engineer": engineer},
+                           ensure_ascii=False) + "\n")
+
+
+def build_draft_message(cand):
+    """候補1件を、送信可能な MIME メール（下書き）に組み立てる。ネットワーク不要（テスト可）。
+    宛先が未確定なら To 空＋本文冒頭に注記。属性フラグも本文冒頭に代表確認として付す。送信はしない。"""
+    import email.message
+
+    p = reply_parts(cand)
+    # 送信ガードレール：REOorGA混入や宛先ドメイン違反があれば作らない
+    check = validate_draft(f"From: {SALES_FROM}\nTo: {p['to']}\n件名: {p['subject']}\n\n{p['body']}")
+    hard = [x for x in check if "🔴" in x]
+    if hard:
+        return None, hard
+    to_ok = ("@" in p["to"]) and _is_sendable_addr(p["to"])
+    prefix = ""
+    if not to_ok:
+        prefix += "※宛先未確定：送信前に配信元担当のアドレスを To に入れてください。\n\n"
+    if cand.get("flags"):
+        prefix += "※代表確認：" + " / ".join(cand["flags"]) + "\n\n"
+    msg = email.message.EmailMessage()
+    msg["From"] = SALES_FROM
+    if to_ok:
+        msg["To"] = p["to"]
+    msg["Subject"] = p["subject"]
+    msg.set_content(prefix + p["body"])
+    return msg, []
+
+
+def save_drafts_to_sales(result, base_date):
+    """マッチした候補（高/中）の返信下書きを sales@ の下書きフォルダに IMAP APPEND で保存。
+    **送信は一切しない**（\\Draft フラグ・下書き保存のみ）。同一(案件,要員)は重複作成しない。
+    SALES_IMAP_HOST/PASSWORD 未設定なら何もしない（代表がSecret登録するまで無効）。"""
+    host = _env("SALES_IMAP_HOST")
+    pw = _env("SALES_IMAP_PASSWORD")
+    user = _env("SALES_IMAP_USER", SALES_FROM)
+    folder = _env("SALES_DRAFTS_FOLDER", "Drafts")
+    if not (host and pw):
+        print("[drafts] SALES_IMAP_HOST/PASSWORD 未設定のため下書き保存はスキップ（Secret登録で有効化）")
+        return
+    import imaplib
+    import time as _time
+
+    made = load_drafted()
+    targets = [c for c in result.get("candidates", [])
+               if c.get("likelihood") in ("高", "中")
+               and _dupe_key(c.get("case"), c.get("engineer")) not in made]
+    if not targets:
+        print("[drafts] 新規の下書きなし（全て作成済み or 候補なし）")
+        return
+    saved = skipped = 0
+    M = imaplib.IMAP4_SSL(host, int(_env("SALES_IMAP_PORT", "993")))
+    try:
+        M.login(user, pw)
+        for c in targets:
+            msg, hard = build_draft_message(c)
+            if msg is None:
+                skipped += 1
+                print(f"[drafts] スキップ（ガードレール違反）: {c.get('engineer')} {hard}")
+                continue
+            typ, _ = M.append(folder, "(\\Draft)",
+                              imaplib.Time2Internaldate(_time.time()), msg.as_bytes())
+            if typ == "OK":
+                append_drafted(c.get("case", ""), c.get("engineer", ""), base_date.isoformat())
+                saved += 1
+                print(f"[drafts] 下書き保存: {c.get('engineer')} × {c.get('case')}")
+            else:
+                skipped += 1
+                print(f"[drafts] APPEND失敗（{typ}）: {c.get('engineer')}（フォルダ名 {folder} を確認）")
+    except Exception as e:  # noqa  下書き保存の失敗は本体を止めない
+        print(f"[drafts] エラー: {e}")
+    finally:
+        try:
+            M.logout()
+        except Exception:  # noqa
+            pass
+    print(f"[drafts] sales@ の下書きに {saved} 件保存（folder={folder}／スキップ {skipped}）")
 
 
 def validate_draft(draft, cand=None):
@@ -836,51 +948,54 @@ def post_notion_rows(result):
             print(f"[notion] error: {e}")
 
 
-def _notion_blocks_from_digest(text):
-    """digestテキストをNotionブロックに変換。見出し(##/###)は見出しブロックに、
-    本文は段落に。**blockquote記号『>』は除去**（Notionに『>』を出さない）。"""
-    def _para(content):
-        out = []
-        for i in range(0, len(content), 1900):
-            out.append({"object": "block", "type": "paragraph",
-                        "paragraph": {"rich_text": [{"type": "text", "text": {"content": content[i:i + 1900]}}]}})
-        return out
+def _nt_block(kind, txt):
+    return {"object": "block", "type": kind,
+            kind: {"rich_text": [{"type": "text", "text": {"content": (txt or "")[:1900]}}]}}
 
-    def _head(txt, kind):
-        return {"object": "block", "type": kind,
-                kind: {"rich_text": [{"type": "text", "text": {"content": txt[:1900]}}]}}
 
-    blocks, buf = [], []
-
-    def flush():
-        if buf:
-            blocks.extend(_para("\n".join(buf).strip("\n")))
-            buf.clear()
-
-    for raw in text.split("\n"):
-        line = re.sub(r"^[ \t]*>[ \t]?", "", raw)   # 行頭のblockquote記号『>』を除去
-        if line.startswith("### "):
-            flush(); blocks.append(_head(line[4:], "heading_3"))
-        elif line.startswith("## "):
-            flush(); blocks.append(_head(line[3:], "heading_2"))
-        elif line.startswith("# "):
-            flush(); blocks.append(_head(line[2:], "heading_1"))
-        else:
-            buf.append(line)
-    flush()
+def _notion_blocks_from_result(result):
+    """**要約・マッチ度・スキルシート要約だけ**の簡潔ブロックを作る（返信本文は載せない＝縦に広げない）。
+    返信全文は sales@ の下書きに入る。Notionは『見て判断する』面に絞る。"""
+    blocks = []
+    cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0), reverse=True)
+    if cands:
+        blocks.append(_nt_block("heading_2", "提案候補（スコア順）"))
+    for c in cands:
+        flag = ("　⚠️" + " / ".join(c["flags"])) if c.get("flags") else ""
+        blocks.append(_nt_block(
+            "heading_3",
+            f"{c.get('engineer','?')} × {c.get('case','?')}　{c.get('score','?')}/100・{c.get('likelihood','?')}{flag}"))
+        blocks.append(_nt_block(
+            "bulleted_list_item",
+            f"枠 {c.get('tier','-')}｜配信元 {c.get('company','?')} {c.get('person','')}｜To {c.get('to','要・宛先確認')}"))
+        blocks.append(_nt_block("bulleted_list_item", f"マッチ内訳 {_fmt_breakdown(c)}"))
+        if c.get("summary"):
+            blocks.append(_nt_block("bulleted_list_item", f"サマリー {c['summary']}"))
+        if c.get("skillsheet_summary"):
+            files = "／".join(c.get("skillsheet_files", [])) or "添付"
+            blocks.append(_nt_block("bulleted_list_item", f"📎 スキルシート（{files}） {c['skillsheet_summary']}"))
+        elif c.get("skillsheet_note"):
+            blocks.append(_nt_block("bulleted_list_item", f"📎 {c['skillsheet_note']}"))
+        blocks.append(_nt_block("bulleted_list_item", "返信下書き → sales@ の下書きフォルダに保存済み（開いて送信）"))
+        blocks.append({"object": "block", "type": "divider", "divider": {}})
+    excluded = result.get("excluded", [])
+    if excluded:
+        blocks.append(_nt_block("heading_2", "除外・低"))
+        for e in excluded[:20]:
+            blocks.append(_nt_block("bulleted_list_item", f"{e.get('item','?')}：{e.get('reason','')}"))
     return blocks[:95]
 
 
-def post_notion_page(digest_text, base_date):
-    """NOTION_PAGE_ID(親ページ)配下に、その日の候補ページ『SES候補 YYYY-MM-DD』を作成して本文を書く。
-    DBが無くてもNotionに自動反映できる簡易ルート（親ページを1つ用意＋共有するだけ）。"""
+def post_notion_page(result, base_date):
+    """NOTION_PAGE_ID(親ページ)配下に、その日の候補ページ『SES候補 YYYY-MM-DD』を作成。
+    **要約＋マッチ度＋スキルシート要約のみ**（返信本文は載せない）。DB不要・親ページ共有だけで動く。"""
     token = os.environ.get("NOTION_TOKEN")
     parent = _env("NOTION_PAGE_ID") or _env("NOTION_PARENT_ID")
     if not (token and parent):
         return
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
                "Notion-Version": "2022-06-28"}
-    children = _notion_blocks_from_digest(digest_text) or [
+    children = _notion_blocks_from_result(result) or [
         {"object": "block", "type": "paragraph", "paragraph": {"rich_text": []}}]
     payload = {
         "parent": {"page_id": parent},
@@ -971,8 +1086,12 @@ def main():
     print(digest)
     print("=" * 60)
     print(f"[ok] digest -> {path}")
-    post_notion_page(digest, base_date)  # 親ページ配下に日次候補ページを作成（NOTION_PAGE_ID）
+    post_notion_page(result, base_date)  # 親ページ配下に日次候補ページ（要約＋マッチ度＋スキルシート要約のみ）
     post_notion_rows(result)             # レビューDBがあれば行も追加（NOTION_DB_ID・任意）
+    try:                                 # マッチ候補の返信下書きを sales@ の下書きに自動投入（送信はしない）
+        save_drafts_to_sales(result, base_date)
+    except Exception as e:  # noqa  下書き保存の失敗は本体を止めない
+        print(f"[drafts] スキップ（エラー）: {e}")
 
 
 if __name__ == "__main__":

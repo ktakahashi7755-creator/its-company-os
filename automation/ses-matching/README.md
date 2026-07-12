@@ -113,7 +113,13 @@ digestは成果物(artifact)＋Notionへ。**リポジトリにはコミット�
 | Variable | `OPENAI_MODEL`(gpt-4o-mini) / `LLM_PROVIDER` | 任意（モデル・プロバイダ明示） |
 | Secret | `IMAP_HOST` / `IMAP_PASSWORD` | 受信（`IMAP_USER` は既定 contact@reorga.co.jp） |
 | Variable | `IMAP_PORT`(993) / `IMAP_FOLDER` / `FRESH_DAYS`(5) / `SALES_FROM` | 任意設定 |
-| Secret | `NOTION_TOKEN` / `NOTION_DB_ID` | レビューDBへ行追加（任意） |
+| Secret | `NOTION_TOKEN` / `NOTION_PAGE_ID` | Notionへ日次候補ページ自動作成 |
+| Secret | `SALES_IMAP_HOST` / `SALES_IMAP_PASSWORD` | **sales@ の下書き自動保存**（`SALES_IMAP_USER` は既定 sales@its-tokyo.com） |
+| Variable | `SALES_IMAP_PORT`(993) / `SALES_DRAFTS_FOLDER`(Drafts) | 任意（下書きフォルダ名。例 `INBOX.Drafts`） |
+
+> **下書き自動保存**：マッチした候補（高/中）の返信下書きを、毎朝 sales@ の下書き(Drafts)フォルダに
+> IMAP APPEND で保存する（`\Draft` フラグ・**送信はしない**）。同一(案件×要員)は重複作成しない。
+> `SALES_IMAP_*` が未設定の間はスキップ（登録すると有効化）。代表は下書きを開いて1社ずつ送信するだけ。
 
 > 採点キーは **OpenAI か Anthropic のどちらか一方**でよい（`OPENAI_API_KEY` があればOpenAIを既定採用）。
 > `IMAP_PASSWORD` / APIキーは必ず Secrets。コード・チャット・mdに書かない。

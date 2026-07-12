@@ -37,6 +37,11 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}             # Notion連携トークン
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}         # ★親ページID（配下に日次候補ページを自動作成）
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}             # 任意（レビューDBへ行追加）
+          SALES_IMAP_HOST: ${{ secrets.SALES_IMAP_HOST }}       # sales@its-tokyo.com の受信サーバ名（下書き保存用）
+          SALES_IMAP_USER: ${{ secrets.SALES_IMAP_USER }}       # 既定 sales@its-tokyo.com
+          SALES_IMAP_PASSWORD: ${{ secrets.SALES_IMAP_PASSWORD }} # ★Secret（sales@のパスワード）
+          SALES_IMAP_PORT: ${{ vars.SALES_IMAP_PORT }}          # 任意（既定 993）
+          SALES_DRAFTS_FOLDER: ${{ vars.SALES_DRAFTS_FOLDER }}  # 任意（既定 Drafts／例 INBOX.Drafts）
         run: python automation/ses-matching/run_ses_matching.py --source imap
       - name: Upload digest artifact
         if: always()
