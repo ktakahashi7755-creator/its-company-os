@@ -1,6 +1,8 @@
 name: SES自動マッチング
 
 on:
+  push:
+    branches: [claude/focused-bell-kt8d7o]   # ★一時的：検証後に外す
   schedule:
     # GitHub ActionsのcronはUTC。8:30 JST = 23:30 UTC（前日）。
     - cron: "30 23 * * *"
