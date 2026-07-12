@@ -195,10 +195,43 @@ def eval_dedup():
     return hit0 and hit1
 
 
+def eval_finalize():
+    """返信下書きの決定論テンプレ差し込み（finalize_draft）を検証。
+    ①②③＋要員名が正しく入り、固定の案件本文が挿入され、ガードレール違反ゼロであること。"""
+    print("── 返信下書きのテンプレ差し込み（finalize_draft・決定論・APIキー不要）")
+    cand = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "A.N", "company": "ルートゼロ株式会社",
+            "person": "伝刀", "to": "要・宛先確認", "src_subject": "Re:【7/12】NW A.N 20年 即日"}
+    d = R.finalize_draft(cand)
+    checks = [
+        ("From固定", d.startswith(f"From: {R.SALES_FROM}")),
+        ("件名Re:…_ITS村山", "件名: Re:" in d and d.count("_ITS村山") == 1),
+        ("Re:の重ね付け無し", "Re:Re:" not in d and "Re:【7/12】NW A.N 20年 即日" in d),
+        ("会社名", "ルートゼロ株式会社" in d),
+        ("担当者＋様", "伝刀様" in d),
+        ("要員名＋様", "配信で頂きましたA.N様" in d),
+        ("案件本文の固定挿入", "大手遊技機メーカー向けに" in d and "＝＝＝＝＝" in d),
+        ("面談可能日を尋ねる", "オンライン面談可能日" in d),
+        ("ガードレール違反ゼロ", R.validate_draft(d) == []),
+        ("REOorGA不在", R.REOORGA_ADDR not in d),
+    ]
+    ok = 0
+    for label, hit in checks:
+        ok += 1 if hit else 0
+        print(f"   {'✔' if hit else '✗'} [{label}]")
+    # 未知の会社/担当はプレースホルダに倒れること
+    d2 = R.finalize_draft({"case": "遊技機メーカー NW/Sec 支援", "engineer": "K.H"})
+    ph = ("〇〇株式会社" in d2 and "ご担当者様" in d2)
+    print(f"   {'✔' if ph else '✗'} [未知の会社/担当はプレースホルダ]")
+    ok += 1 if ph else 0
+    total = len(checks) + 1
+    print(f"   テンプレ差し込み 正解率： {ok}/{total} = {ok/total:.2f}")
+    return ok == total
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
-                    choices=["prefilter", "draft", "contact", "dedup", "scoring", "all"],
+                    choices=["prefilter", "draft", "finalize", "contact", "dedup", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -207,6 +240,8 @@ def main():
         results.append(eval_prefilter())
     if args.stage in ("draft", "all"):
         results.append(eval_draft())
+    if args.stage in ("finalize", "all"):
+        results.append(eval_finalize())
     if args.stage in ("contact", "all"):
         results.append(eval_contact())
     if args.stage in ("dedup", "all"):

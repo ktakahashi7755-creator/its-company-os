@@ -540,54 +540,55 @@ def score_with_llm(kept, dropped, base_date):
 
 
 # ---------- 下書き確定（指示出し→送信可能な下書き） ----------
-FINALIZE_SYSTEM = """あなたはITS合同会社 営業部の提案メール作成AI。代表が「この要員を出す」と選んだ1件について、
-配信元へ送る**送信可能な提案メール下書き**を、テンプレと署名に厳密に従って完成させる。
-
-厳守（ガードレール）:
-- From は必ず {sales_from}（ITSセールス固定）。REOorGA受信アドレス({reoorga})からは絶対に送らない。
-- To は与えられた宛先をそのまま使う。宛先が「要・宛先確認」等で不明なら、To 行は「要・宛先確認」のまま残し、
-  本文は完成させる（勝手にアドレスを創作しない）。
-- 資料に無い情報を捏造しない。単価・稼働開始・経験年数などが不明なら「要確認」と書く。
-- スキルシート要約がある場合はそれを最優先の根拠にする（本文サマリーより詳細）。
-- 属性（年齢・国籍等）は本文に書かない。フラグは代表確認事項として本文外で扱う。
-- 送信はしない（下書きのみ）。末尾に署名ブロックを必ず付ける。
-
-作法（reply-template.md 準拠・5点を簡潔に）:
-- 書き出しは「〔会社名〕 〔担当者名〕さま」。担当者名が不明なら「ご担当者さま」。
-- 本文は 1.誰を 2.なぜ合うか（案件必須要件への適合を具体で・両刀/設計構築運用/PL等） 3.単価 4.稼働可能日 5.スキルシート添付、の5点。
-- 面談1回・弊社同席前提でも問題ない旨を添える。
-- 代表からの補足指示（note）があれば反映する（例：単価を強調、商流を明記 等）。ただしガードレールは超えない。
-
-出力は **From/To/件名/本文/署名までを含むメール下書き全文のみ**（前後に解説を付けない）。"""
+def _fmt_reply_subject(subject):
+    """返信件名用に、既存の Re:/Fwd: 接頭辞を1つ剥がして本文だけ返す（重ね付け防止）。"""
+    s = (subject or "").strip()
+    return re.sub(r"^\s*(re|fwd?|ｒｅ)\s*[:：]\s*", "", s, flags=re.I).strip()
 
 
-def finalize_draft(cand, note=""):
-    """候補1件を、送信可能な提案メール下書きに確定する（reply-template＋署名＋スキルシート要約を使用）。
-    指示出し（make_draft.py）と、任意で日次実行の両方から呼べる共通エンジン。"""
-    template = read("reply-template.md") or ""
-    signature = read("signature.md") or ""
-    fields = {
-        "案件": cand.get("case", ""),
-        "枠": cand.get("tier", ""),
-        "要員イニシャル": cand.get("engineer", ""),
-        "配信元会社": cand.get("company", ""),
-        "担当者名": cand.get("person", ""),
-        "宛先(To)": cand.get("to", "要・宛先確認"),
-        "要員サマリー": cand.get("summary", ""),
-        "通過根拠": cand.get("reason", ""),
-        "懸念": cand.get("concern", ""),
-        "スキルシート要約": cand.get("skillsheet_summary", "") or "（添付なし・本文サマリーで作成）",
-    }
-    field_text = "\n".join(f"- {k}：{v}" for k, v in fields.items())
-    sys_p = FINALIZE_SYSTEM.format(sales_from=SALES_FROM, reoorga=REOORGA_ADDR)
-    user_p = (
-        f"# テンプレ（作法の正本）\n{template[:3500]}\n\n"
-        f"# 署名（末尾にそのまま付ける）\n{signature[:1200]}\n\n"
-        f"# この候補の確定材料\n{field_text}\n\n"
-        f"# 代表からの補足指示（あれば反映）\n{note or '（なし）'}\n\n"
-        f"上記から、送信可能な提案メール下書き全文のみを返してください。"
-    )
-    return _call_llm(sys_p, user_p, json_mode=False).strip()
+def load_case_mail_block(case_hint=""):
+    """案件_*.md の <!-- MAIL-BLOCK-START/END --> に挟まれた『メール貼付用の案件本文』を返す（固定文・そのまま挿入）。
+    複数案件があれば case_hint（案件名の一部）で優先マッチ。無ければ最初のブロック。"""
+    blocks = []
+    for name in sorted(os.listdir(HERE)):
+        if name.startswith("案件_") and name.endswith(".md"):
+            body = read(name) or ""
+            m = re.search(r"<!--\s*MAIL-BLOCK-START\s*-->\s*(.*?)\s*<!--\s*MAIL-BLOCK-END\s*-->", body, re.S)
+            if m:
+                blocks.append((name, m.group(1).strip()))
+    if not blocks:
+        return ""
+    key = (case_hint or "")[:6]
+    if key:
+        for name, blk in blocks:
+            if key in name or key in blk:
+                return blk
+    return blocks[0][1]
+
+
+def finalize_draft(cand, note="", subject=None, company=None, person=None, engineer=None):
+    """候補1件を、配信元への『案件ご紹介』返信下書きに**決定論で**確定する（LLM不使用・テンプレ差し込み）。
+    代表の型：配信で来た要員に対し、こちらの案件を提示し、面談可能日・最新の並行状況を尋ねる。
+    変数＝①件名 ②配信元会社 ③担当者名 ＋ 要員名。案件本文は案件定義の MAIL-BLOCK から固定挿入。
+    引数の subject/company/person/engineer が渡ればそれを最優先（代表がチャットで指定した値）。"""
+    tmpl = read("reply-template.txt") or ""
+    subj = _fmt_reply_subject(subject if subject is not None
+                              else (cand.get("src_subject") or cand.get("case", "")))
+    comp = (company if company is not None else cand.get("company", "")).strip() or "〇〇株式会社"
+    pers = (person if person is not None else cand.get("person", "")).strip() or "ご担当者"
+    eng = (engineer if engineer is not None else cand.get("engineer", "")).strip() or "ご紹介要員"
+    case_body = load_case_mail_block(cand.get("case", ""))
+    body = (tmpl
+            .replace("{件名}", subj)
+            .replace("{会社名}", comp)
+            .replace("{担当者名}", pers)
+            .replace("{要員名}", eng)
+            .replace("{案件本文}", case_body)).strip()
+    to = (cand.get("to") or "要・宛先確認").strip() or "要・宛先確認"
+    draft = f"From: {SALES_FROM}\nTo: {to}\n{body}"
+    if note:
+        draft += f"\n\n【代表の補足指示メモ（送信前に反映/削除）】{note}"
+    return draft
 
 
 # ---------- 宛先(To)の自動抽出（保守的・送信ガードレール内蔵） ----------
@@ -636,10 +637,13 @@ def backfill_contacts(result, kept):
     """候補の To を自動補完＋安全化。LLMが具体アドレスを入れていても、REOorGA/ロール系なら
     抽出器で上書き（＝データ層でも受信アドレスへの送信を防ぐ）。"""
     for c in result.get("candidates", []):
+        src = c.get("src")
+        if isinstance(src, int) and 0 <= src < len(kept):
+            # 返信件名（Re:○○_ITS村山）用に、原メールの件名を保持
+            c.setdefault("src_subject", kept[src].get("subject", ""))
         cur = (c.get("to") or "").strip()
         if "@" in cur and _is_sendable_addr(cur):
             continue  # LLMが妥当な担当アドレスを入れている
-        src = c.get("src")
         if isinstance(src, int) and 0 <= src < len(kept):
             it = kept[src]
             info = extract_contact(it.get("from_addr", ""), it.get("body", ""), it.get("subject", ""))
@@ -710,8 +714,9 @@ def validate_draft(draft, cand=None):
     to_m = re.search(r"^\s*to\s*[:：]\s*(.+)$", draft, re.I | re.M)
     if to_m and REOORGA_ADDR.split("@")[-1].lower() in to_m.group(1).lower():
         issues.append("🔴 宛先(To)がREOorGAドメイン（配信元担当のアドレスに直す）")
-    if "its-tokyo.com" not in low or "ITS合同会社" not in draft:
-        issues.append("署名ブロック（ITS合同会社／sales@its-tokyo.com）が見当たらない")
+    # ITSの識別（送信元 its-tokyo.com＋名乗り 村山）が本文にあること
+    if "its-tokyo.com" not in low or "村山" not in draft:
+        issues.append("ITSの識別（its-tokyo.com／名乗り『村山』）が見当たらない")
     return issues
 
 

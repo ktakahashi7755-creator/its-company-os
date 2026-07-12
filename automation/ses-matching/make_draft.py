@@ -74,7 +74,12 @@ def pick_candidate(cands, selector):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pick", help="要員イニシャル（例 KH / T.Y）または候補番号（スコア降順・1始まり）")
-    ap.add_argument("--note", default="", help="代表の補足指示（単価強調・商流明記など）。任意")
+    ap.add_argument("--note", default="", help="代表の補足指示（送信前メモとして末尾に付く）。任意")
+    # 代表が手入力する①②③（省略時は候補の自動抽出値を使う）
+    ap.add_argument("--subject", default=None, help="①返信件名の元（要員配信の件名）。Re:○○_ITS村山 の○○")
+    ap.add_argument("--company", default=None, help="②配信元の会社名")
+    ap.add_argument("--person", default=None, help="③先方担当者名（「様」は自動付与）")
+    ap.add_argument("--engineer-name", default=None, help="本文『配信で頂きました○○様』の要員名（省略時は候補のイニシャル）")
     ap.add_argument("--date", default=None, help="candidates-YYYYMMDD.json の日付")
     ap.add_argument("--json", default=None, help="候補JSONのパスを明示")
     ap.add_argument("--candidate-json", default=None, help="候補1件のJSONを直接渡す")
@@ -104,15 +109,11 @@ def main():
     dup = _dupe_key(cand.get("case"), cand.get("engineer")) in load_proposed()
 
     flags = "／".join(cand.get("flags", []) or [])
-    draft = finalize_draft(cand, note=args.note)
-    # 安全網：ガードレール違反があれば一度だけ強い警告付きで作り直す
+    # 決定論テンプレ差し込み（①②③＋要員名。手入力があれば最優先）
+    draft = finalize_draft(cand, note=args.note, subject=args.subject,
+                           company=args.company, person=args.person, engineer=args.engineer_name)
+    # 安全網：ガードレール違反（REOorGA混入・From違反 等）を送信前にチェック
     issues = validate_draft(draft, cand)
-    if issues:
-        draft = finalize_draft(
-            cand,
-            note=(args.note + "\n【厳守】From は " + SALES_FROM + " 固定。"
-                  + REOORGA_ADDR + " を本文・From・Toに絶対入れない。末尾に署名を必ず付ける。").strip())
-        issues = validate_draft(draft, cand)
 
     print("=" * 64)
     print(f"■ 送信可能な下書き： {cand.get('engineer','?')} × {cand.get('case','?')}"
