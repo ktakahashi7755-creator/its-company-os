@@ -823,15 +823,31 @@ def save_drafts_to_sales(result, base_date):
         return
     saved = skipped = dup = 0
     folder = _env("SALES_DRAFTS_FOLDER") or "Drafts"   # ログイン失敗時の既定（最後のログ用）
-    # 接続タイムアウト（サーバ名誤り等でハングしないよう短めに）
+    port = int(_env("SALES_IMAP_PORT", "993"))
+    tmo = int(_env("SALES_IMAP_TIMEOUT", "30"))
+    tries = int(_env("SALES_IMAP_RETRIES", "3"))
+    # 接続＋ログイン（Xserver等はクラウドIPから間欠的にタイムアウトするため、指数バックオフで再試行）
+    M = None
+    for attempt in range(1, tries + 1):
+        try:
+            M = imaplib.IMAP4_SSL(host, port, timeout=tmo)
+            M.login(user, pw)
+            break
+        except Exception as e:  # noqa  接続/認証の失敗
+            try:
+                if M is not None:
+                    M.logout()
+            except Exception:  # noqa
+                pass
+            M = None
+            if attempt < tries:
+                wait = 5 * attempt
+                print(f"[drafts] 接続リトライ {attempt}/{tries}（{type(e).__name__}: {e}）→ {wait}秒待機")
+                _time.sleep(wait)
+            else:
+                print(f"[drafts] 接続失敗（{tries}回試行）。SALES_IMAP_HOST/PORT/PASSWORD・到達性を確認: {e}")
+                return
     try:
-        M = imaplib.IMAP4_SSL(host, int(_env("SALES_IMAP_PORT", "993")),
-                              timeout=int(_env("SALES_IMAP_TIMEOUT", "20")))
-    except Exception as e:  # noqa  接続自体の失敗（サーバ名/ポート/到達性）
-        print(f"[drafts] 接続失敗（SALES_IMAP_HOST/PORT を確認）: {e}")
-        return
-    try:
-        M.login(user, pw)
         folder = _env("SALES_DRAFTS_FOLDER") or _detect_drafts_folder(M)
         print(f"[drafts] 下書きフォルダ: {folder}")
         try:
