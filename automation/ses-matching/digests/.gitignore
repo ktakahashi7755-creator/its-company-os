@@ -1,0 +1,4 @@
+# 生成ダイジェストはコミットしない（候補者名・連絡先を含むため）
+digest-*.md
+!.gitignore
+!README.md
