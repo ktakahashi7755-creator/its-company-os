@@ -831,7 +831,13 @@ def save_drafts_to_sales(result, base_date):
         return
     saved = skipped = dup = 0
     folder = _env("SALES_DRAFTS_FOLDER") or "Drafts"   # ログイン失敗時の既定（最後のログ用）
-    M = imaplib.IMAP4_SSL(host, int(_env("SALES_IMAP_PORT", "993")))
+    # 接続タイムアウト（サーバ名誤り等でハングしないよう短めに）
+    try:
+        M = imaplib.IMAP4_SSL(host, int(_env("SALES_IMAP_PORT", "993")),
+                              timeout=int(_env("SALES_IMAP_TIMEOUT", "20")))
+    except Exception as e:  # noqa  接続自体の失敗（サーバ名/ポート/到達性）
+        print(f"[drafts] 接続失敗（SALES_IMAP_HOST/PORT を確認）: {e}")
+        return
     try:
         M.login(user, pw)
         folder = _env("SALES_DRAFTS_FOLDER") or _detect_drafts_folder(M)
