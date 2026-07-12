@@ -856,6 +856,9 @@ def save_drafts_to_sales(result, base_date):
             continue
         _seen.add(k)
         targets.append(c)
+    # Notion表示（スコア降順）と同じ順で下書き保存＝両者の並びを統一
+    targets.sort(key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0,
+                 reverse=True)
     if not targets:
         print("[drafts] 対象候補（高/中）なし")
         return
@@ -1041,41 +1044,6 @@ def write_digest(text, base_date):
     return path
 
 
-def post_notion_rows(result):
-    token = os.environ.get("NOTION_TOKEN")
-    db_id = os.environ.get("NOTION_DB_ID")
-    if not (token and db_id):
-        return
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
-               "Notion-Version": "2022-06-28"}
-    for c in result.get("candidates", []):
-        title = f"{c.get('case','?')} × {c.get('engineer','?')}"
-        props = {
-            "案件×要員": {"title": [{"text": {"content": title[:200]}}]},
-            "面談通過可能性": {"select": {"name": c.get("likelihood", "低")}},
-            "スコア": {"number": c.get("score", 0)},
-            "ステータス": {"select": {"name": "未確認"}},
-        }
-        blocks = []
-        if c.get("skillsheet_summary"):
-            files = "／".join(c.get("skillsheet_files", [])) or "添付"
-            blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-                {"type": "text", "text": {"content": f"【スキル要約 {files}】\n{c['skillsheet_summary']}"[:1900]}}]}})
-        blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-            {"type": "text", "text": {"content": (c.get("draft", ""))[:1900]}}]}})
-        payload = {"parent": {"database_id": db_id}, "properties": props, "children": blocks}
-        try:
-            req = urllib.request.Request("https://api.notion.com/v1/pages",
-                                         data=json.dumps(payload).encode("utf-8"),
-                                         headers=headers, method="POST")
-            urllib.request.urlopen(req, timeout=30)
-            print(f"[notion] row added: {title}")
-        except urllib.error.HTTPError as e:
-            print(f"[notion] error {e.code}: {e.read().decode('utf-8','ignore')[:300]}")
-        except Exception as e:  # noqa
-            print(f"[notion] error: {e}")
-
-
 def _nt_block(kind, txt):
     return {"object": "block", "type": kind,
             kind: {"rich_text": [{"type": "text", "text": {"content": (txt or "")[:1900]}}]}}
@@ -1120,6 +1088,132 @@ def notion_upload_file(token, fname, payload):
     except Exception as e:  # noqa
         print(f"[notion] fileアップロードエラー: {e}")
         return None
+
+
+# ---------- Notion データベース（送信ステータス管理・重複行なし） ----------
+def _notion_api(method, url, token, body=None):
+    """Notion REST を叩く小ヘルパ。成功=dict、失敗=None（エラーはログ）。"""
+    h = {"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28",
+         "Content-Type": "application/json"}
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    try:
+        req = urllib.request.Request(url, data=data, headers=h, method=method)
+        return json.loads(urllib.request.urlopen(req, timeout=30).read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        print(f"[notion-db] {method} {url.split('/v1/')[-1]} エラー {e.code}: "
+              f"{e.read().decode('utf-8','ignore')[:250]}")
+        return None
+    except Exception as e:  # noqa
+        print(f"[notion-db] {method} エラー: {e}")
+        return None
+
+
+NOTION_DB_TITLE = "SES提案トラッカー"
+
+
+def ensure_notion_db(token, parent):
+    """親ページ配下の『SES提案トラッカー』DBを探し、無ければ作成してdb_idを返す（best-effort）。"""
+    found = _notion_api("POST", "https://api.notion.com/v1/search", token,
+                        {"query": NOTION_DB_TITLE,
+                         "filter": {"property": "object", "value": "database"}})
+    if found:
+        for r in found.get("results", []):
+            par = r.get("parent", {})
+            if par.get("type") == "page_id" and par.get("page_id", "").replace("-", "") == parent.replace("-", ""):
+                return r.get("id")
+    # 無ければ作成
+    schema = {
+        "案件×要員": {"title": {}},
+        "キー": {"rich_text": {}},
+        "面談通過可能性": {"select": {"options": [
+            {"name": "高", "color": "green"}, {"name": "中", "color": "yellow"}, {"name": "低", "color": "gray"}]}},
+        "スコア": {"number": {}},
+        "年齢": {"rich_text": {}},
+        "配信元": {"rich_text": {}},
+        "宛先To": {"rich_text": {}},
+        "ステータス": {"select": {"options": [
+            {"name": "未送信", "color": "blue"}, {"name": "送信済", "color": "green"},
+            {"name": "見送り", "color": "red"}]}},
+        "日付": {"date": {}},
+    }
+    created = _notion_api("POST", "https://api.notion.com/v1/databases", token, {
+        "parent": {"type": "page_id", "page_id": parent},
+        "title": [{"type": "text", "text": {"content": NOTION_DB_TITLE}}],
+        "properties": schema,
+    })
+    if created:
+        cid = created.get("id")
+        print(f"[notion-db] データベース作成: {NOTION_DB_TITLE}（id={cid}）"
+              f"※固定するなら Secret NOTION_DB_ID にこのidを登録")
+        return cid
+    return None
+
+
+def _db_has_key(token, db_id, key):
+    """DBに キー==key の行が既にあるか（重複行を作らない・代表のステータスを保全）。"""
+    res = _notion_api("POST", f"https://api.notion.com/v1/databases/{db_id}/query", token,
+                      {"filter": {"property": "キー", "rich_text": {"equals": key}}, "page_size": 1})
+    return bool(res and res.get("results"))
+
+
+def _rt(s):
+    return [{"type": "text", "text": {"content": str(s or "")[:1900]}}]
+
+
+def _db_row_props(c, base_date):
+    """候補1件をDB行のproperties（ステータス=未送信）に変換する純粋関数（テスト可）。"""
+    return {
+        "案件×要員": {"title": _rt(f"{c.get('engineer','?')} × {c.get('case','?')}")},
+        "キー": {"rich_text": _rt(_its_key(c.get("case"), c.get("engineer")))},
+        "面談通過可能性": {"select": {"name": c.get("likelihood", "低")}},
+        "スコア": {"number": c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0},
+        "年齢": {"rich_text": _rt(c.get("age", "不明"))},
+        "配信元": {"rich_text": _rt(f"{c.get('company','?')} {c.get('person','')}")},
+        "宛先To": {"rich_text": _rt(c.get("to", "要・宛先確認"))},
+        "ステータス": {"select": {"name": "未送信"}},
+        "日付": {"date": {"start": base_date.isoformat()}},
+    }
+
+
+def post_notion_db_rows(result, base_date):
+    """マッチ候補を『SES提案トラッカー』DBに行として追加（ステータス=未送信）。
+    重複キーはスキップ（代表が変えたステータスを上書きしない）。スキル要約＋原本ファイルを行本文に付す。"""
+    token = os.environ.get("NOTION_TOKEN")
+    parent = _env("NOTION_PAGE_ID") or _env("NOTION_PARENT_ID")
+    if not (token and parent):
+        return
+    db_id = _env("NOTION_DB_ID") or ensure_notion_db(token, parent)
+    if not db_id:
+        print("[notion-db] DB未取得のため行追加をスキップ（ページ投稿は別途実施）")
+        return
+    cands = sorted(result.get("candidates", []),
+                   key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0,
+                   reverse=True)
+    added = dup = 0
+    for c in cands:
+        key = _its_key(c.get("case"), c.get("engineer"))
+        if _db_has_key(token, db_id, key):
+            dup += 1
+            continue
+        props = _db_row_props(c, base_date)
+        children = []
+        if c.get("skillsheet_summary"):
+            files = "／".join(c.get("skillsheet_files", [])) or "添付"
+            children.append(_nt_block("paragraph", f"📎 スキルシート要約（{files}）：{c['skillsheet_summary']}"))
+        for fname, payload in (c.get("_ss_files", []) or []):
+            if not payload:
+                continue
+            up_id = notion_upload_file(token, fname, payload)
+            if up_id:
+                children.append({"object": "block", "type": "file",
+                                 "file": {"type": "file_upload", "file_upload": {"id": up_id},
+                                          "name": (fname or "skillsheet")[:100]}})
+        row = _notion_api("POST", "https://api.notion.com/v1/pages", token,
+                          {"parent": {"database_id": db_id}, "properties": props,
+                           "children": children[:95]})
+        if row:
+            added += 1
+    print(f"[notion-db] 行追加 {added}／既存スキップ {dup}（DB: {NOTION_DB_TITLE}）")
 
 
 def _notion_blocks_from_result(result, token=None):
@@ -1266,8 +1360,11 @@ def main():
     print(digest)
     print("=" * 60)
     print(f"[ok] digest -> {path}")
-    post_notion_page(result, base_date)  # 親ページ配下に日次候補ページ（要約＋マッチ度＋スキルシート要約のみ）
-    post_notion_rows(result)             # レビューDBがあれば行も追加（NOTION_DB_ID・任意）
+    post_notion_page(result, base_date)  # 日次スナップショット（要約＋マッチ度＋年齢＋スキルシート）
+    try:                                 # 送信ステータス管理DB（未送信/送信済/見送り・重複行なし）
+        post_notion_db_rows(result, base_date)
+    except Exception as e:  # noqa  DB反映の失敗は本体を止めない
+        print(f"[notion-db] スキップ（エラー）: {e}")
     try:                                 # マッチ候補の返信下書きを sales@ の下書きに自動投入（送信はしない）
         save_drafts_to_sales(result, base_date)
     except Exception as e:  # noqa  下書き保存の失敗は本体を止めない
