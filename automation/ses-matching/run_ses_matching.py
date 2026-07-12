@@ -705,6 +705,14 @@ def flag_duplicates(result, seen):
 
 
 # ---------- sales@ の下書き(Drafts)へ自動投入（IMAP APPEND・送信はしない） ----------
+def _its_key(case, engineer):
+    """案件×要員の安定キー（ASCII・重複判定用）。下書きに X-ITS-Key ヘッダとして埋め、
+    次回以降は下書きフォルダをこのキーで検索して二重作成を防ぐ（ログに依存しない）。"""
+    import hashlib
+    raw = f"{str(case or '').strip()}|{str(engineer or '').strip()}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+
+
 def _drafts_log_path():
     return os.path.join(HERE, "digests", "drafts-log.jsonl")
 
@@ -757,6 +765,7 @@ def build_draft_message(cand):
     if to_ok:
         msg["To"] = p["to"]
     msg["Subject"] = p["subject"]
+    msg["X-ITS-Key"] = _its_key(cand.get("case"), cand.get("engineer"))  # 重複判定用（下書き検索キー）
     msg.set_content(prefix + p["body"])
     # スキルシート原本(Excel/PDF)を下書きに添付（代表は下書きを開いて中身を確認→そのまま送信）
     for fname, payload in cand.get("_ss_files", []) or []:
@@ -816,21 +825,32 @@ def save_drafts_to_sales(result, base_date):
     import imaplib
     import time as _time
 
-    made = load_drafted()
-    targets = [c for c in result.get("candidates", [])
-               if c.get("likelihood") in ("高", "中")
-               and _dupe_key(c.get("case"), c.get("engineer")) not in made]
+    targets = [c for c in result.get("candidates", []) if c.get("likelihood") in ("高", "中")]
     if not targets:
-        print("[drafts] 新規の下書きなし（全て作成済み or 候補なし）")
+        print("[drafts] 対象候補（高/中）なし")
         return
-    saved = skipped = 0
+    saved = skipped = dup = 0
     folder = _env("SALES_DRAFTS_FOLDER") or "Drafts"   # ログイン失敗時の既定（最後のログ用）
     M = imaplib.IMAP4_SSL(host, int(_env("SALES_IMAP_PORT", "993")))
     try:
         M.login(user, pw)
         folder = _env("SALES_DRAFTS_FOLDER") or _detect_drafts_folder(M)
         print(f"[drafts] 下書きフォルダ: {folder}")
+        try:
+            M.select(folder)   # HEADER 検索には mailbox 選択が必要
+        except Exception:  # noqa
+            pass
         for c in targets:
+            key = _its_key(c.get("case"), c.get("engineer"))
+            # 下書きフォルダを X-ITS-Key で検索し、既にあれば作らない（ログに依存しない・実行跨ぎで重複防止）
+            try:
+                typ, data = M.search(None, "HEADER", "X-ITS-Key", key)
+                if typ == "OK" and data and data[0].split():
+                    dup += 1
+                    print(f"[drafts] 既に下書きあり（重複回避）: {c.get('engineer')} × {c.get('case')}")
+                    continue
+            except Exception:  # noqa  検索不可でも作成は続ける
+                pass
             msg, hard = build_draft_message(c)
             if msg is None:
                 skipped += 1
@@ -839,7 +859,6 @@ def save_drafts_to_sales(result, base_date):
             typ, _ = M.append(folder, "(\\Draft)",
                               imaplib.Time2Internaldate(_time.time()), msg.as_bytes())
             if typ == "OK":
-                append_drafted(c.get("case", ""), c.get("engineer", ""), base_date.isoformat())
                 saved += 1
                 print(f"[drafts] 下書き保存: {c.get('engineer')} × {c.get('case')}")
             else:
@@ -852,7 +871,7 @@ def save_drafts_to_sales(result, base_date):
             M.logout()
         except Exception:  # noqa
             pass
-    print(f"[drafts] sales@ の下書きに {saved} 件保存（folder={folder}／スキップ {skipped}）")
+    print(f"[drafts] sales@ 下書き：新規{saved}／重複回避{dup}／スキップ{skipped}（folder={folder}）")
 
 
 def validate_draft(draft, cand=None):
