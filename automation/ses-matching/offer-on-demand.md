@@ -50,9 +50,18 @@ python make_offer_draft.py --source imap --engineer KN --notion --save-drafts
 ```
 
 - 認証情報（`IMAP_HOST`/`IMAP_PASSWORD` 等）は **GitHub Secrets**。ローカルには置かない＝**実行はActions**。
-- ワークフロー：**`.github/workflows/ses-offer-matching.yml`**（毎朝 8:35 JST／手動実行可）。
-  従来の `ses-matching.yml`（8:30・案件→要員）と別ジョブで**衝突しない**。採点は決定論のため**LLMキー不要**。
+- ワークフロー：**`.github/workflows/ses-offer-matching.yml`**（`workflow_dispatch` で手動実行。cronは
+  ライブ検証後に既定ブランチマージで有効化）。従来 `ses-matching.yml`（8:30）と別ジョブ。**LLMキー不要**。
 - 出力：`ses-offer-digest` アーティファクト＋Notion『KN案件 YYYY-MM-DD』＋sales@の下書き（`\Draft`）。
+
+**氾濫防止のガードレール（重要）**：contact@ は案件と要員が混在し日数千件流れる。誤って大量の下書き/Notion行を
+作らないよう、逆方向は次の3段で絞る：
+1. **案件性フィルタ** `looks_like_case()`：募集/案件/参画/単価/常駐 等の案件マーカーが薄く、
+   スキルシート系の語（要員配信）が濃いメールは**対象外**。
+2. **役割必須** `offer_fit()`：PMO/PM補佐/IT事務/導入支援/サポートデスク等の**役割語（STRONG）が無い**メールは
+   汎用スキル語（調整/資料作成/サポート）だけでは**中+に上げない**（＝誤爆させない）。
+3. **件数上限** `OFFER_MAX`（既定30）：提案対象＝高/中・鮮度内をスコア降順で上限まで。超過は「今回見送り・要確認」でログ。
+sales@下書き/Notion行/`.eml` はこの**絞り込み後の対象のみ**に作る。X-ITS-Key で実行跨ぎの重複も作らない。
 
 ### ② 個別の提案下書きを作る（1案件＝1下書き）
 

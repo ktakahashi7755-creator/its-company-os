@@ -51,14 +51,27 @@ ENGINEER_META = {
            "pdf": os.path.join(HERE, "..", "..", "data", "skillsheets", "KN_スキルシート.pdf")},
 }
 
-# KN の「刺さる／外れる」語（正本は 要員_KN_PMOサポート.md §4。ここは判定用の写し）
-FIT_POS = ["pmo", "pmo補佐", "pmサポート", "pm補佐", "プロジェクト推進", "プロジェクトアシスタント",
-           "pjアシスタント", "アシスタント", "it事務", "事務", "サービス導入", "導入支援", "導入サポート",
-           "オンボーディング", "サポート", "ヘルプデスク", "バックオフィス", "営業事務", "秘書",
-           "進捗管理", "課題管理", "タスク管理", "資料作成", "議事録", "調整", "問い合わせ",
-           "カスタマーサクセス", "推進支援", "pm支援", "運用サポート"]
+# KN の適合語（正本は 要員_KN_PMOサポート.md §4。ここは判定用の写し）。
+# STRONG＝案件の「役割」がKN向き（これが1つも無ければ generic なので中+にしない）。
+# WEAK＝どの案件にも出がちなスキル語（単独では加点のみ・単独で中にしない＝誤爆/氾濫防止）。
+FIT_STRONG = ["pmo", "pmo補佐", "pmサポート", "pm補佐", "pm支援", "プロジェクト推進", "推進支援",
+              "プロジェクトアシスタント", "pjアシスタント", "it事務", "事務", "サービス導入", "導入支援",
+              "導入サポート", "オンボーディング", "ヘルプデスク", "バックオフィス", "営業事務", "秘書",
+              "カスタマーサクセス", "運用サポート", "サポートデスク", "プロジェクト管理補佐"]
+FIT_WEAK = ["進捗管理", "課題管理", "タスク管理", "資料作成", "議事録", "調整", "問い合わせ", "サポート"]
 FIT_NEG = ["設計", "構築", "開発", "プログラ", "コーディング", "java", "python", "インフラ構築",
-           "ネットワーク設計", "サーバ構築", "dba", "保守開発", "実装"]
+           "ネットワーク設計", "サーバ構築", "dba", "保守開発", "実装", "コーダー"]
+
+# 「案件（人材募集）」らしさの語。これが無いメール（＝要員配信/雑多）は対象にしない（氾濫防止）。
+CASE_MARKERS = ["募集", "案件", "参画", "常駐", "客先", "ポジション", "急募", "増員", "求人",
+                "アサイン", "稼働開始", "月額", "単価", "商流", "面談", "リモート", "参画時期",
+                "案件名", "業務内容", "必須スキル", "歓迎スキル", "就業", "精算", "期間"]
+# 「要員（スキルシート配信）」らしさの語。CASE_MARKERS が弱いのにこれが濃いメールは要員配信とみなす。
+ENGINEER_MARKERS = ["スキルシート", "要員", "人材のご紹介", "ご提案", "自己pr", "最寄", "最寄駅",
+                    "得意", "保有スキル", "職務経歴", "稼働可能", "単価：", "年齢：", "性別："]
+
+# 1回の実行で下書き/Notion行にする上限（氾濫・重い添付の大量APPENDを防ぐ）。超過分は切り捨てをログ。
+OFFER_MAX = int(_env("OFFER_MAX", "30"))
 
 
 def load_engineer_mail_block(eng_hint=""):
@@ -171,24 +184,46 @@ def parse_case_inbox(text):
     return cases
 
 
+def looks_like_case(subject, body):
+    """このメールが『案件（人材募集）』らしいか。要員配信/雑多メールを対象から外す（氾濫防止）。
+    案件マーカーが2つ以上＝案件。要員マーカーが濃く案件マーカーが弱い＝要員配信とみなし False。"""
+    hay = f"{subject}\n{body}".lower()
+    case_hits = sum(1 for k in CASE_MARKERS if k.lower() in hay)
+    eng_hits = sum(1 for k in ENGINEER_MARKERS if k.lower() in hay)
+    if eng_hits >= 2 and eng_hits > case_hits:
+        return False, "要員配信の可能性（スキルシート系の語が濃い）"
+    if case_hits < 2:
+        return False, "案件（募集）と判定できる語が不足"
+    return True, ""
+
+
 def offer_fit(subject, body):
     """KN の案件適合を決定論で採点（keyword）。総合判断は代表。
-    返り値: {pos, neg, hits, likelihood, concerns}"""
+    STRONG（役割）が無ければ generic なので中+にしない＝誤爆・氾濫を防ぐ。
+    返り値: {pos, neg, strong, weak, hits, likelihood, concerns, is_case}"""
     hay = f"{subject}\n{body}".lower()
-    pos = [k for k in FIT_POS if k in hay]
+    strong = [k for k in FIT_STRONG if k in hay]
+    weak = [k for k in FIT_WEAK if k in hay]
     neg = [k for k in FIT_NEG if k in hay]
+    pos = strong + weak
+    is_case, why = looks_like_case(subject, body)
     concerns = []
-    if neg and not pos:
-        concerns.append("技術専任寄り・要確認（PMO/事務/サポート要素が見当たらない）")
-    if len(pos) >= 2 and not (neg and not pos):
+    if not is_case:
+        concerns.append(f"案件性が弱い（{why}）→対象外")
+        likelihood = "低"
+    elif neg and not strong:
+        concerns.append("技術専任寄り・要確認（PMO/事務/サポート等の役割が見当たらない）")
+        likelihood = "低"
+    elif len(strong) >= 2 or (len(strong) >= 1 and len(weak) >= 2):
         likelihood = "高"
-    elif len(pos) >= 1:
+    elif len(strong) >= 1:
         likelihood = "中"
     else:
-        likelihood = "低"
-    if neg and pos:
+        likelihood = "低"   # WEAK語だけ（調整/資料作成など汎用語）は中にしない
+    if neg and strong:
         concerns.append("技術要素あり・非技術PMO/事務としての当て方を面談前に確認")
-    return {"pos": pos, "neg": neg, "hits": len(pos), "likelihood": likelihood, "concerns": concerns}
+    return {"pos": pos, "neg": neg, "strong": strong, "weak": weak, "hits": len(pos),
+            "likelihood": likelihood, "concerns": concerns, "is_case": is_case}
 
 
 def within_fresh(date_str, base_date, fresh_days):
@@ -474,35 +509,42 @@ def run_batch(inbox_path, base_date, fresh_days, engineer, note, do_notion=False
 
     print("=" * 72)
     print(f"■ 逆方向マッチング（要員 {engineer} × 配信案件）洗い出し　基準日 {base_date.isoformat()}／鮮度{fresh_days}日")
-    print("=" * 72)
-    for i, c in enumerate(rows, 1):
-        mark = "🚫対象外" if c["_fresh"] is False else {"高": "◎", "中": "○", "低": "△"}[c["likelihood"]]
+    # 高/中・鮮度内のみを提案対象にし、スコア降順で OFFER_MAX 件に制限（氾濫・重い添付大量APPENDを防ぐ）
+    hits = [c for c in rows if c["_fresh"] is not False and c["likelihood"] in ("高", "中")]
+    actionable = hits[:OFFER_MAX]
+    truncated = len(hits) - len(actionable)
+    n_case = sum(1 for c in rows if c["_fit"].get("is_case"))
+    print(f"[info] 取込 {len(rows)} 件 → 案件性あり {n_case} 件／高・中 {len(hits)} 件"
+          f"／提案対象 {len(actionable)} 件"
+          + (f"（上限{OFFER_MAX}で {truncated} 件は今回見送り・要確認）" if truncated > 0 else ""))
+    # 表示は提案対象＋高中の残り数のみ（低・対象外の全列挙はしない＝大量ログ回避）
+    for i, c in enumerate(actionable, 1):
+        mark = {"高": "◎", "中": "○"}[c["likelihood"]]
         print(f"{i:>2}. {mark} 面談通過可能性:{c['likelihood']}（{c['score']}点）"
-              f"　配信日:{c['src_date'] or '不明'}　{c['case']}")
-        if c["_fit"]["pos"]:
-            print(f"      刺さる: {' / '.join(c['_fit']['pos'][:8])}｜To {c['to']}")
+              f"　配信日:{c['src_date'] or '不明'}　{c['case'][:48]}")
+        if c["_fit"]["strong"]:
+            print(f"      役割適合: {' / '.join(c['_fit']['strong'][:6])}｜To {c['to']}")
         if c["flags"]:
             print(f"      ⚠️ {' / '.join(c['flags'])}")
     print("=" * 72)
-    actionable = [c for c in rows if c["_fresh"] is not False and c["likelihood"] in ("高", "中")]
-    dpath = write_offer_digest(rows, base_date, engineer)
-    emls, has_pdf = write_offer_emls(rows, base_date, engineer)
-    # 候補JSON（gitignore）も残す
+    dpath = write_offer_digest(actionable, base_date, engineer)
+    emls, has_pdf = write_offer_emls(actionable, base_date, engineer)
+    # 候補JSON（gitignore）も残す（提案対象のみ）
     out_dir = os.path.join(HERE, "digests")
     with open(os.path.join(out_dir, f"offer-candidates-{base_date.isoformat().replace('-','')}.json"),
               "w", encoding="utf-8") as f:
-        json.dump({"date": base_date.isoformat(), "engineer": engineer,
-                   "candidates": [{k: v for k, v in c.items() if not k.startswith("_")} for c in rows]},
+        json.dump({"date": base_date.isoformat(), "engineer": engineer, "total": len(rows),
+                   "candidates": [{k: v for k, v in c.items() if not k.startswith("_")} for c in actionable]},
                   f, ensure_ascii=False, indent=2)
-    print(f"提案候補（高/中・鮮度内）：{len(actionable)}件")
+    print(f"提案候補（高/中・鮮度内・上限内）：{len(actionable)}件")
     print(f"[ok] ダイジェスト → {dpath}")
     print(f"[ok] 提案下書き .eml（{'PDF添付' if has_pdf else 'PDF無し'}・要手動送信）→ {len(emls)}件 digests/ に出力")
     if do_notion:
-        post_offer_notion(rows, base_date, engineer)
+        post_offer_notion(actionable, base_date, engineer)
     else:
         print("（Notion可視化するには --notion を付けて実行。NOTION_TOKEN/NOTION_PAGE_ID が必要）")
     if save_drafts:
-        save_offer_drafts_to_sales(rows, engineer)
+        save_offer_drafts_to_sales(actionable, engineer)
     return rows
 
 

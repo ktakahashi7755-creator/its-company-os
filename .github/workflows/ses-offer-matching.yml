@@ -5,16 +5,12 @@ name: SES逆方向マッチング（要員→案件）
 # → sales@ の下書きフォルダへ保存（**送信はしない**）。採点はキーワード決定論のためLLMキー不要。
 
 on:
+  # スケジュールは既定ブランチでのみ発火。逆方向のライブ検証（件数が健全＝氾濫しない）を代表が確認し、
+  # 既定ブランチへマージするまでは cron を有効化しない運用（未検証コードを毎朝走らせない）。
   schedule:
     # 8:35 JST = 23:35 UTC（従来の案件→要員 8:30 と衝突しないよう5分ずらす）。
     - cron: "35 23 * * *"
-  workflow_dispatch: {}   # 手動実行
-  # --- 一時pushトリガー（動作確認用・確認後に削除する。HANDOVER §10 の手順） ---
-  push:
-    branches: [claude/its-staff-to-project-match-qkjj07]
-    paths:
-      - automation/ses-matching/make_offer_draft.py
-      - .github/workflows/ses-offer-matching.yml
+  workflow_dispatch: {}   # 手動実行（検証はこちらで1回ずつ・氾濫防止のガード入り）
 
 jobs:
   ses-offer-matching:
@@ -35,6 +31,7 @@ jobs:
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}           # ★Secret（コードに書かない）
           IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}                  # 任意（既定 INBOX）
           FRESH_DAYS: ${{ vars.FRESH_DAYS }}                    # 任意（既定 5）
+          OFFER_MAX: ${{ vars.OFFER_MAX }}                      # 任意（既定 30・提案対象/下書き/DB行の上限＝氾濫防止）
           MAX_FETCH: ${{ vars.MAX_FETCH }}                      # 任意（既定 2500）
           MSG_BYTES: ${{ vars.MSG_BYTES }}                      # 任意（既定 40000）
           SALES_FROM: ${{ vars.SALES_FROM }}                   # 任意（既定 sales@its-tokyo.com）
