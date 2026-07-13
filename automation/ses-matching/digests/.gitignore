@@ -4,5 +4,8 @@ candidates-*.json
 proposed-log.jsonl
 drafts-log.jsonl
 notion-db-id.txt
+offer-digest-*.md
+offer-candidates-*.json
+offer-*.eml
 !.gitignore
 !README.md

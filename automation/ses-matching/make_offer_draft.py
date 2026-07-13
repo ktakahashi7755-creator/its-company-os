@@ -31,16 +31,24 @@
 import argparse
 import datetime
 import glob
+import json
 import os
 import re
 import sys
 
 from run_ses_matching import (HERE, SALES_FROM, REOORGA_ADDR, read, load_signature,
                               extract_contact, validate_draft, _is_sendable_addr,
-                              _fmt_reply_subject, load_proposed, append_proposed, _dupe_key, _env)
+                              _fmt_reply_subject, load_proposed, append_proposed, _dupe_key, _env,
+                              _notion_api, _nt_block, post_notion_db_rows)
 
 # 既定の要員（当面は KN 一人。複数プロパーになったら --engineer で切替）
 DEFAULT_ENGINEER = "KN"
+
+# 要員のプロフィール既定値（Notion行・年齢等の表示に使用。正本は 要員_*.md）
+ENGINEER_META = {
+    "KN": {"age": "30", "gender": "女", "want_rate": "48万（応相談）",
+           "pdf": os.path.join(HERE, "..", "..", "data", "skillsheets", "KN_スキルシート.pdf")},
+}
 
 # KN の「刺さる／外れる」語（正本は 要員_KN_PMOサポート.md §4。ここは判定用の写し）
 FIT_POS = ["pmo", "pmo補佐", "pmサポート", "pm補佐", "プロジェクト推進", "プロジェクトアシスタント",
@@ -192,7 +200,135 @@ def within_fresh(date_str, base_date, fresh_days):
     return 0 <= (base_date - d).days <= fresh_days
 
 
-def run_batch(inbox_path, base_date, fresh_days, engineer, note):
+def _score_from_fit(fit, fresh):
+    """洗い出しの並べ替え・Notion表示用の目安スコア（0-100）。判定の主軸は likelihood。"""
+    base = min(88, fit["hits"] * 11)
+    if fresh is True:
+        base += 12
+    elif fresh is None:
+        base += 4
+    if fit["neg"] and not fit["pos"]:
+        base = min(base, 40)
+    return min(100, base)
+
+
+def build_candidate(case, fit, fresh, base_date, engineer, seen):
+    """洗い出し1件を、既存Notion関数と互換の候補dictにする（engineer=要員固定・case=案件名）。"""
+    flags = []
+    if fresh is False:
+        flags.append(f"鮮度超過（配信{case['date']}・{base_date.isoformat()}基準5日超）→対象外")
+    if fresh is None:
+        flags.append("配信日不明・要確認")
+    flags += fit["concerns"]
+    if _dupe_key(case["title"], engineer) in seen:
+        flags.append("既提案・重複")
+    to = extract_contact("", case["body"], case["title"])["to"]
+    meta = ENGINEER_META.get(engineer, {})
+    summary = ("適合語：" + " / ".join(fit["pos"][:8])) if fit["pos"] else "KN適合語ヒットなし"
+    return {
+        "engineer": engineer,
+        "case": case["title"],
+        "company": "要確認（配信元）",
+        "person": "",
+        "to": to,
+        "score": _score_from_fit(fit, fresh),
+        "likelihood": ("低" if fresh is False else fit["likelihood"]),
+        "age": meta.get("age", "不明"),
+        "src_date": case["date"],
+        "flags": flags,
+        "summary": summary,
+        "_fit": fit,
+        "_fresh": fresh,
+        "_body": case["body"],
+    }
+
+
+def write_offer_digest(rows, base_date, engineer):
+    """洗い出しをMarkdownダイジェストにして digests/offer-digest-YYYYMMDD.md へ（gitignore）。"""
+    d = base_date.isoformat()
+    lines = [f"# 逆方向マッチング（要員 {engineer} × 配信案件）ダイジェスト（{d}）", "",
+             f"基準日 {d}／鮮度5日／面談通過可能性の主軸は KN 適合。**送信は代表が手動**（下書きまで）。", ""]
+    for i, c in enumerate(rows, 1):
+        mark = "🚫対象外" if c["_fresh"] is False else {"高": "◎", "中": "○", "低": "△"}[c["likelihood"]]
+        lines.append(f"## {i}. {mark} {c['case']}")
+        lines.append(f"- 面談通過可能性：**{c['likelihood']}**（目安{c['score']}点）／配信日：{c['src_date'] or '不明'}")
+        lines.append(f"- 宛先To：{c['to']}")
+        lines.append(f"- {c['summary']}")
+        if c["flags"]:
+            lines.append(f"- ⚠️ {' / '.join(c['flags'])}")
+        lines.append("")
+    out_dir = os.path.join(HERE, "digests")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"offer-digest-{d.replace('-', '')}.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    return path
+
+
+def write_offer_emls(rows, base_date, engineer):
+    """高/中・鮮度内の候補について、スキルシートPDF添付済みの .eml を digests/ に書き出す（gitignore）。
+    宛先・会社・担当は配信本文から取れた分のみ。未確定は本文冒頭に注記。**送信はしない**。"""
+    meta = ENGINEER_META.get(engineer, {})
+    pdf = meta.get("pdf")
+    pdf = pdf if (pdf and os.path.exists(pdf)) else None
+    out_dir = os.path.join(HERE, "digests")
+    os.makedirs(out_dir, exist_ok=True)
+    written = []
+    for i, c in enumerate(rows, 1):
+        if c["_fresh"] is False or c["likelihood"] not in ("高", "中"):
+            continue
+        parts = build_offer_parts(subject=c["case"], company=None, person=None,
+                                  case_name=c["case"], to=c["to"], body=c["_body"], engineer=engineer)
+        msg, issues = build_offer_eml(parts, attach_path=pdf, engineer=engineer)
+        if msg is None:
+            print(f"[offer-eml] スキップ（{issues}）: {c['case']}")
+            continue
+        safe = re.sub(r"[^\w぀-ヿ一-鿿]+", "_", c["case"])[:40]
+        path = os.path.join(out_dir, f"offer-{base_date.isoformat()}-{i:02d}-{safe}.eml")
+        with open(path, "wb") as f:
+            f.write(msg.as_bytes())
+        written.append(path)
+    return written, bool(pdf)
+
+
+def offer_notion_blocks(rows, engineer):
+    """『KN案件 YYYY-MM-DD』ページ用のブロック（洗い出しの可視化・返信本文は載せない）。"""
+    blocks = [_nt_block("heading_2", f"提案候補（要員 {engineer} × 配信案件・スコア順）")]
+    for c in rows:
+        mark = "🚫対象外" if c["_fresh"] is False else {"高": "◎", "中": "○", "低": "△"}[c["likelihood"]]
+        flag = ("　⚠️" + " / ".join(c["flags"])) if c["flags"] else ""
+        blocks.append(_nt_block("heading_3", f"{mark} {c['case']}　{c['score']}/100・{c['likelihood']}{flag}"))
+        blocks.append(_nt_block("bulleted_list_item",
+                                f"配信日 {c['src_date'] or '不明'}｜To {c['to']}｜{c['summary']}"))
+        blocks.append({"object": "block", "type": "divider", "divider": {}})
+    return blocks[:95]
+
+
+def post_offer_notion(rows, base_date, engineer):
+    """① 日次スナップショットページ『{engineer}案件 YYYY-MM-DD』を親ページ配下に作成。
+    ② 高/中・鮮度内の候補を既存『SES提案トラッカー』DBへ行追加（engineer×案件・ステータス=未送信）。
+    NOTION_TOKEN/NOTION_PAGE_ID 未設定なら何もしない（Actions/ローカルでトークン設定時に有効）。"""
+    token = os.environ.get("NOTION_TOKEN")
+    parent = _env("NOTION_PAGE_ID") or _env("NOTION_PARENT_ID")
+    if not (token and parent):
+        print("[notion] NOTION_TOKEN/NOTION_PAGE_ID 未設定のためNotion反映はスキップ（トークン設定で有効化）")
+        return
+    title = f"{engineer}案件 {base_date.isoformat()}"
+    page = _notion_api("POST", "https://api.notion.com/v1/pages", token, {
+        "parent": {"page_id": parent},
+        "properties": {"title": {"title": [{"text": {"content": title}}]}},
+        "children": offer_notion_blocks(rows, engineer),
+    })
+    print(f"[notion] page created: {title}" if page else "[notion] page 作成に失敗（トークン/共有を確認）")
+    # DBは高/中・鮮度内のみ（低・対象外は行にしない）
+    actionable = [c for c in rows if c["_fresh"] is not False and c["likelihood"] in ("高", "中")]
+    try:
+        post_notion_db_rows({"candidates": actionable}, base_date)
+    except Exception as e:  # noqa  DB反映の失敗は本体を止めない
+        print(f"[notion-db] スキップ（エラー）: {e}")
+
+
+def run_batch(inbox_path, base_date, fresh_days, engineer, note, do_notion=False):
     text = read(os.path.relpath(inbox_path, HERE)) if os.path.exists(os.path.join(HERE, inbox_path)) else None
     if text is None:
         with open(inbox_path, encoding="utf-8") as f:
@@ -205,35 +341,39 @@ def run_batch(inbox_path, base_date, fresh_days, engineer, note):
     for c in cases:
         fresh = within_fresh(c["date"], base_date, fresh_days)
         fit = offer_fit(c["title"], c["body"])
-        flags = []
-        if fresh is False:
-            flags.append(f"鮮度超過（配信{c['date']}・{fresh_days}日超）→対象外")
-        if fresh is None:
-            flags.append("配信日不明・要確認")
-        flags += fit["concerns"]
-        if _dupe_key(c["title"], engineer) in seen:
-            flags.append("既提案・重複")
-        rows.append({"case": c, "fit": fit, "fresh": fresh, "flags": flags})
+        rows.append(build_candidate(c, fit, fresh, base_date, engineer, seen))
     # スコア降順（鮮度超過は末尾）
-    rows.sort(key=lambda r: (r["fresh"] is not False, r["fit"]["hits"]), reverse=True)
+    rows.sort(key=lambda c: (c["_fresh"] is not False, c["score"]), reverse=True)
 
     print("=" * 72)
     print(f"■ 逆方向マッチング（要員 {engineer} × 配信案件）洗い出し　基準日 {base_date.isoformat()}／鮮度{fresh_days}日")
     print("=" * 72)
-    for i, r in enumerate(rows, 1):
-        c, fit = r["case"], r["fit"]
-        mark = "🚫対象外" if r["fresh"] is False else {"高": "◎", "中": "○", "低": "△"}[fit["likelihood"]]
-        print(f"{i:>2}. {mark} 面談通過可能性:{fit['likelihood']}／適合語{fit['hits']}件"
-              f"　配信日:{c['date'] or '不明'}　{c['title']}")
-        if fit["pos"]:
-            print(f"      刺さる: {' / '.join(fit['pos'][:8])}")
-        if r["flags"]:
-            print(f"      ⚠️ {' / '.join(r['flags'])}")
+    for i, c in enumerate(rows, 1):
+        mark = "🚫対象外" if c["_fresh"] is False else {"高": "◎", "中": "○", "低": "△"}[c["likelihood"]]
+        print(f"{i:>2}. {mark} 面談通過可能性:{c['likelihood']}（{c['score']}点）"
+              f"　配信日:{c['src_date'] or '不明'}　{c['case']}")
+        if c["_fit"]["pos"]:
+            print(f"      刺さる: {' / '.join(c['_fit']['pos'][:8])}｜To {c['to']}")
+        if c["flags"]:
+            print(f"      ⚠️ {' / '.join(c['flags'])}")
     print("=" * 72)
-    actionable = [r for r in rows if r["fresh"] is not False and r["fit"]["likelihood"] in ("高", "中")]
-    print(f"提案候補（高/中・鮮度内）：{len(actionable)}件。個別の下書きは各案件で "
-          f"`--subject/--company/--person/--to` を指定して生成してください。")
-    print("（宛先・会社名・担当者は配信メールから手入力が確実。本文貼付があれば --body-file で To 自動抽出も可）")
+    actionable = [c for c in rows if c["_fresh"] is not False and c["likelihood"] in ("高", "中")]
+    dpath = write_offer_digest(rows, base_date, engineer)
+    emls, has_pdf = write_offer_emls(rows, base_date, engineer)
+    # 候補JSON（gitignore）も残す
+    out_dir = os.path.join(HERE, "digests")
+    with open(os.path.join(out_dir, f"offer-candidates-{base_date.isoformat().replace('-','')}.json"),
+              "w", encoding="utf-8") as f:
+        json.dump({"date": base_date.isoformat(), "engineer": engineer,
+                   "candidates": [{k: v for k, v in c.items() if not k.startswith("_")} for c in rows]},
+                  f, ensure_ascii=False, indent=2)
+    print(f"提案候補（高/中・鮮度内）：{len(actionable)}件")
+    print(f"[ok] ダイジェスト → {dpath}")
+    print(f"[ok] 提案下書き .eml（{'PDF添付' if has_pdf else 'PDF無し'}・要手動送信）→ {len(emls)}件 digests/ に出力")
+    if do_notion:
+        post_offer_notion(rows, base_date, engineer)
+    else:
+        print("（Notion可視化するには --notion を付けて実行。NOTION_TOKEN/NOTION_PAGE_ID が必要）")
     return rows
 
 
@@ -257,13 +397,15 @@ def main():
     ap.add_argument("--inbox", default=None, help="案件インボックス（複数案件）を一括で洗い出し")
     ap.add_argument("--date", default=None, help="一括モードの基準日 YYYY-MM-DD（鮮度判定）")
     ap.add_argument("--fresh-days", type=int, default=int(_env("FRESH_DAYS", "5")), help="鮮度（既定5日）")
+    ap.add_argument("--notion", action="store_true",
+                    help="一括モードでNotionに反映（『〔要員〕案件 YYYY-MM-DD』ページ＋提案トラッカーDB行）")
     args = ap.parse_args()
 
     if args.inbox:
         base = datetime.date.fromisoformat(args.date) if args.date else None
         if base is None:
             sys.exit("一括モードは --date YYYY-MM-DD（基準日）が必要です（鮮度5日の判定に使用）。")
-        run_batch(args.inbox, base, args.fresh_days, args.engineer, args.note)
+        run_batch(args.inbox, base, args.fresh_days, args.engineer, args.note, do_notion=args.notion)
         return
 
     if not args.subject:

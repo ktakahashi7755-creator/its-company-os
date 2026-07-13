@@ -16,16 +16,28 @@
 
 ## 使い方（代表）
 
-### ① 洗い出し（鮮度5日＋KN適合で候補を並べる）
+### ① 洗い出し（マッチ度検証）＋提案下書き＋Notion可視化
 
 REOorGA配信の案件を `inbox-案件.md` に貼って（`inbox-案件.example.md` の形式・**配信日必須**）：
 
 ```bash
+# マッチ度検証＋ダイジェスト＋提案下書き(.eml)を生成（Notionには出さない）
 python make_offer_draft.py --inbox inbox-案件.md --date <今日 YYYY-MM-DD>
+# ↑にNotion可視化を追加（『KN案件 YYYY-MM-DD』ページ＋提案トラッカーDB行）
+python make_offer_draft.py --inbox inbox-案件.md --date <今日 YYYY-MM-DD> --notion
 ```
 
-→ 案件を「面談通過可能性（高/中/低）／KNに刺さる語／鮮度」で並べ、**5日超過は対象外**、
-技術専任寄りは「要確認」でフラグ。まず本命（◎/○）を選ぶ。
+**やること（自動）**：
+- 案件を「面談通過可能性（高/中/低）／KNに刺さる語／鮮度」で並べ、**5日超過は対象外**、
+  技術専任寄りは「要確認」でフラグ。
+- `digests/offer-digest-YYYYMMDD.md`（ダイジェスト）＋ `offer-candidates-*.json`＋
+  **高/中・鮮度内の提案下書き `.eml`（KNスキルシートPDF添付済み）** を `digests/` に出力（すべて**gitignore**）。
+- `--notion` 付きなら、親ページ配下に **『KN案件 YYYY-MM-DD』スナップショットページ** を作成し、
+  高/中候補を既存 **『SES提案トラッカー』DB** に `KN × 〔案件〕`（ステータス=未送信）で行追加。
+  → 従来方向（案件×要員）と**同じDBで一元管理**でき、未送信/送信済/見送りのカンバンで可視化できる。
+  `NOTION_TOKEN`/`NOTION_PAGE_ID` 未設定ならNotionはスキップ（`.eml`／ダイジェストは出る）。
+
+**やらないこと（人間＝代表）**：本命の最終確認と **送信**（`.eml` を sales@ で開いて手動送信・PDF添付は自動済み）。
 
 ### ② 個別の提案下書きを作る（1案件＝1下書き）
 

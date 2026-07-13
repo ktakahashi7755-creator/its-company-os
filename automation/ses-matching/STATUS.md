@@ -43,14 +43,19 @@
   - `要員_KN_PMOサポート.md`……要員KN定義（PMO補佐・PMサポート等／単価48万・応相談／即日〜／大井町／
     当てにいく案件の型・KN適合語）＋提案本文の MAIL-BLOCK（代表提供の要員サマリー）。
   - `reply-template-offer.txt`……要員先行テンプレ（`{会社名}{担当者名}{案件名}{要員サマリー}{署名}`／件名 `RE:〔案件件名〕`）。
-  - `make_offer_draft.py`……①`--inbox` で洗い出し（鮮度5日＋KN適合で高/中/低・技術専任フラグ）②単一案件で
-    送信可能な下書き ③`--attach` でスキルシートPDFを添付した `.eml` 書き出し。**送信はしない**。
+  - `make_offer_draft.py`……①`--inbox` で洗い出し（マッチ度検証・鮮度5日＋KN適合で高/中/低・技術専任フラグ）＝
+    ダイジェスト＋候補JSON＋**提案下書き .eml（KNスキルシートPDF添付）** を `digests/` に出力（gitignore）。
+    `--notion` で **『KN案件 YYYY-MM-DD』ページ＋『SES提案トラッカー』DBへ行追加（KN×案件・未送信）** も反映。
+    ②単一案件で送信可能な下書き ③`--attach` でPDF添付 `.eml`。**送信はしない**。
   - `offer-on-demand.md`（手順書）／`examples/offer-sample-inbox.md`（動作確認用ダミー）。
   - KNスキルシート原本 PDF は `../../data/skillsheets/KN_スキルシート.pdf`（**gitignore・個人情報**・提案時に添付）。
-- 動作確認：サンプルinboxで PMO補佐/SaaS導入支援を「高」、NW設計構築を「技術専任・要確認」、5日超過案件を
-  「対象外」に正しく分類。単一案件で From=sales@・RE:件名・署名入り下書き＋PDF添付 .eml を生成（validate_draft緑）。
-- **残（代表の入力待ち）**：実際の洗い出しには**直近5日の案件配信**が要る。`inbox-案件.md` に貼るか、
-  日次IMAP取込（案件を要員KNに当てる側）へ組み込むかは代表判断。詳細は `offer-on-demand.md`。
+- 動作確認：サンプルinboxで PMO補佐(100)/SaaS導入支援(89)を「高」、NW設計構築を「技術専任・要確認(低)」、
+  6日前のIT事務案件を「対象外(鮮度超過)」に正しく分類。高/中2件のPDF添付 .eml＋ダイジェストを生成。
+  Notionはトークン未設定時は安全にスキップ（既存 `run_ses_matching.py` は無改変＝eval gate緑を維持）。
+- **可視化の運用**：`--notion` で従来方向と**同じ『SES提案トラッカー』DB**にKN行を積み、未送信/送信済/見送りで管理。
+  日次スナップは『KN案件 YYYY-MM-DD』ページ。→ Notion反映には `NOTION_TOKEN`/`NOTION_PAGE_ID`（Actions or ローカル）。
+- **残（代表の入力待ち）**：実データの洗い出しには**直近5日の案件配信**が要る。`inbox-案件.md` に貼る（即・確実）か、
+  日次IMAP取込へ逆方向を組み込む（自動化・要ライブ検証）かは代表判断。詳細は `offer-on-demand.md`。
 
 ## ✅ 済（2026-07-13）：Notion DB反映のハードニング（レビュー2巡目・4件）＋本番検証
 

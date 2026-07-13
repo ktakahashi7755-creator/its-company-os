@@ -88,8 +88,8 @@ automation/ses-matching/
 `make_offer_draft.py` で行う。手順の正本は **`offer-on-demand.md`**。
 
 ```bash
-# ① 洗い出し（鮮度5日＋要員KN適合で案件を並べる）
-python automation/ses-matching/make_offer_draft.py --inbox automation/ses-matching/inbox-案件.md --date 2026-07-12
+# ① 洗い出し（マッチ度検証）＋ダイジェスト＋提案下書き.eml（PDF添付）。--notion でNotion可視化も
+python automation/ses-matching/make_offer_draft.py --inbox automation/ses-matching/inbox-案件.md --date 2026-07-13 --notion
 # ② 個別の提案下書き（1案件＝1下書き・件名は RE:〔案件件名〕）
 python automation/ses-matching/make_offer_draft.py \
   --subject "〔案件配信の件名〕" --company "株式会社〇〇" --person "山田" --to "tanto@example.co.jp"
