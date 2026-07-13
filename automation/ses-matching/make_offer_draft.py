@@ -39,7 +39,8 @@ import sys
 from run_ses_matching import (HERE, SALES_FROM, REOORGA_ADDR, read, load_signature,
                               extract_contact, validate_draft, _is_sendable_addr,
                               _fmt_reply_subject, load_proposed, append_proposed, _dupe_key, _env,
-                              _notion_api, _nt_block, post_notion_db_rows)
+                              _notion_api, _nt_block, post_notion_db_rows,
+                              fetch_imap, _detect_drafts_folder, _its_key)
 
 # 既定の要員（当面は KN 一人。複数プロパーになったら --engineer で切替）
 DEFAULT_ENGINEER = "KN"
@@ -222,13 +223,14 @@ def build_candidate(case, fit, fresh, base_date, engineer, seen):
     flags += fit["concerns"]
     if _dupe_key(case["title"], engineer) in seen:
         flags.append("既提案・重複")
-    to = extract_contact("", case["body"], case["title"])["to"]
+    to = extract_contact(case.get("from_addr", ""), case["body"], case["title"])["to"]
     meta = ENGINEER_META.get(engineer, {})
     summary = ("適合語：" + " / ".join(fit["pos"][:8])) if fit["pos"] else "KN適合語ヒットなし"
+    company = (case.get("from_name") or "").strip() or "要確認（配信元）"
     return {
         "engineer": engineer,
         "case": case["title"],
-        "company": "要確認（配信元）",
+        "company": company,
         "person": "",
         "to": to,
         "score": _score_from_fit(fit, fresh),
@@ -328,14 +330,139 @@ def post_offer_notion(rows, base_date, engineer):
         print(f"[notion-db] スキップ（エラー）: {e}")
 
 
-def run_batch(inbox_path, base_date, fresh_days, engineer, note, do_notion=False):
-    text = read(os.path.relpath(inbox_path, HERE)) if os.path.exists(os.path.join(HERE, inbox_path)) else None
-    if text is None:
-        with open(inbox_path, encoding="utf-8") as f:
-            text = f.read()
-    cases = parse_case_inbox(text)
-    if not cases:
-        sys.exit(f"案件が見つかりません（{inbox_path}）。inbox-案件.example.md の形式で貼ってください。")
+def load_cases_from_imap(base_date, fresh_days):
+    """contact@（REOorGA受信箱）から直近days日のメールを取得し、案件cases形式に整える。
+    既存 run_ses_matching.fetch_imap を再利用（読むだけ・添付は読まない）。NW/Sec用プレフィルタは通さず、
+    全件を KN の offer_fit で選定する（逆方向は案件の型が違うため）。"""
+    items = fetch_imap(base_date, fresh_days)
+    cases = []
+    for it in items:
+        subj = (it.get("subject") or "").strip()
+        body = (it.get("body") or "").strip()
+        if not (subj or body):
+            continue
+        cases.append({
+            "title": subj or "（件名なし）",
+            "date": it.get("date") or "",
+            "body": body,
+            "from_addr": it.get("from_addr", ""),
+            "from_name": it.get("from_name", ""),
+        })
+    return cases
+
+
+def save_offer_drafts_to_sales(rows, engineer):
+    """高/中・鮮度内の提案下書きを sales@ の下書きフォルダに IMAP APPEND で保存（**送信しない**）。
+    スキルシートPDFを添付。同一(案件×要員)は X-ITS-Key で重複作成しない。
+    run_ses_matching.save_drafts_to_sales と同じ接続/フォルダ/重複ロジックを踏襲（別テンプレのため別関数）。
+    SALES_IMAP_HOST/PASSWORD 未設定なら何もしない。"""
+    host = _env("SALES_IMAP_HOST")
+    pw = _env("SALES_IMAP_PASSWORD")
+    user = _env("SALES_IMAP_USER", SALES_FROM)
+    if not (host and pw):
+        print("[drafts] SALES_IMAP_HOST/PASSWORD 未設定のため sales@下書き保存はスキップ（Secret登録で有効化）")
+        return
+    import imaplib
+    import time as _time
+
+    meta = ENGINEER_META.get(engineer, {})
+    pdf = meta.get("pdf")
+    pdf = pdf if (pdf and os.path.exists(pdf)) else None
+    targets = [c for c in rows if c["_fresh"] is not False and c["likelihood"] in ("高", "中")]
+    targets.sort(key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
+    if not targets:
+        print("[drafts] 対象候補（高/中）なし")
+        return
+    port = int(_env("SALES_IMAP_PORT", "993"))
+    tmo = int(_env("SALES_IMAP_TIMEOUT", "30"))
+    tries = int(_env("SALES_IMAP_RETRIES", "3"))
+    folder = _env("SALES_DRAFTS_FOLDER") or "Drafts"
+    saved = skipped = dup = 0
+    M = None
+    for attempt in range(1, tries + 1):
+        try:
+            M = imaplib.IMAP4_SSL(host, port, timeout=tmo)
+            M.login(user, pw)
+            break
+        except Exception as e:  # noqa
+            try:
+                if M is not None:
+                    M.logout()
+            except Exception:  # noqa
+                pass
+            M = None
+            if attempt < tries:
+                wait = 5 * attempt
+                print(f"[drafts] 接続リトライ {attempt}/{tries}（{type(e).__name__}: {e}）→ {wait}秒待機")
+                _time.sleep(wait)
+            else:
+                print(f"[drafts] 接続失敗（{tries}回試行）。SALES_IMAP_HOST/PORT/PASSWORD・到達性を確認: {e}")
+                return
+    try:
+        folder = _env("SALES_DRAFTS_FOLDER") or _detect_drafts_folder(M)
+        folder_q = f'"{folder}"' if (" " in folder or "(" in folder) else folder
+        print(f"[drafts] 下書きフォルダ: {folder}")
+        selected = False
+        try:
+            selected = M.select(folder_q)[0] == "OK"
+        except Exception:  # noqa
+            selected = False
+        _seen = set()
+        for c in targets:
+            key = _its_key(c.get("case"), c.get("engineer"))
+            if key in _seen:
+                dup += 1
+                continue
+            _seen.add(key)
+            if selected:
+                try:
+                    typ, data = M.search(None, "HEADER", "X-ITS-Key", key)
+                    if typ == "OK" and data and data[0].split():
+                        dup += 1
+                        print(f"[drafts] 既に下書きあり（重複回避）: {c.get('engineer')} × {c.get('case')}")
+                        continue
+                except Exception:  # noqa
+                    pass
+            parts = build_offer_parts(subject=c["case"], case_name=c["case"], to=c["to"],
+                                      body=c["_body"], engineer=engineer)
+            msg, hard = build_offer_eml(parts, attach_path=pdf, engineer=engineer)
+            if msg is None:
+                skipped += 1
+                print(f"[drafts] スキップ（ガードレール違反）: {c.get('case')} {hard}")
+                continue
+            msg["X-ITS-Key"] = key
+            typ, _ = M.append(folder_q, "(\\Draft)", imaplib.Time2Internaldate(_time.time()), msg.as_bytes())
+            if typ == "OK":
+                saved += 1
+                print(f"[drafts] 下書き保存: {c.get('engineer')} × {c.get('case')}")
+            else:
+                skipped += 1
+                print(f"[drafts] APPEND失敗（{typ}）: {c.get('case')}")
+    except Exception as e:  # noqa
+        print(f"[drafts] エラー: {e}")
+    finally:
+        try:
+            M.logout()
+        except Exception:  # noqa
+            pass
+    print(f"[drafts] sales@ 下書き：新規{saved}／重複回避{dup}／スキップ{skipped}（folder={folder}）")
+
+
+def run_batch(inbox_path, base_date, fresh_days, engineer, note, do_notion=False,
+              source="file", save_drafts=False):
+    if source == "imap":
+        cases = load_cases_from_imap(base_date, fresh_days)
+        if not cases:
+            print("[imap] 取得0件（鮮度内メールなし or 接続失敗）。処理を終了します。")
+            return []
+    else:
+        text = read(os.path.relpath(inbox_path, HERE)) if os.path.exists(os.path.join(HERE, inbox_path)) else None
+        if text is None:
+            with open(inbox_path, encoding="utf-8") as f:
+                text = f.read()
+        cases = parse_case_inbox(text)
+        if not cases:
+            sys.exit(f"案件が見つかりません（{inbox_path}）。inbox-案件.example.md の形式で貼ってください。")
     seen = load_proposed()
     rows = []
     for c in cases:
@@ -374,6 +501,8 @@ def run_batch(inbox_path, base_date, fresh_days, engineer, note, do_notion=False
         post_offer_notion(rows, base_date, engineer)
     else:
         print("（Notion可視化するには --notion を付けて実行。NOTION_TOKEN/NOTION_PAGE_ID が必要）")
+    if save_drafts:
+        save_offer_drafts_to_sales(rows, engineer)
     return rows
 
 
@@ -394,18 +523,24 @@ def main():
     ap.add_argument("--no-log", action="store_true", help="既提案ログに記録しない（試作のみ）")
     ap.add_argument("--date-str", default=None, help="既提案ログの日付（省略時は today 相当を渡すこと）")
     # 一括モード（案件インボックスの洗い出し）
-    ap.add_argument("--inbox", default=None, help="案件インボックス（複数案件）を一括で洗い出し")
+    ap.add_argument("--inbox", default=None, help="案件インボックス（複数案件）を一括で洗い出し（--source file）")
+    ap.add_argument("--source", choices=["file", "imap"], default="file",
+                    help="一括モードの案件ソース。imap＝contact@（REOorGA受信箱）から取得（要 IMAP_* Secret）")
     ap.add_argument("--date", default=None, help="一括モードの基準日 YYYY-MM-DD（鮮度判定）")
     ap.add_argument("--fresh-days", type=int, default=int(_env("FRESH_DAYS", "5")), help="鮮度（既定5日）")
     ap.add_argument("--notion", action="store_true",
                     help="一括モードでNotionに反映（『〔要員〕案件 YYYY-MM-DD』ページ＋提案トラッカーDB行）")
+    ap.add_argument("--save-drafts", action="store_true",
+                    help="高/中候補の下書きを sales@ の下書きフォルダに保存（要 SALES_IMAP_* Secret・送信はしない）")
     args = ap.parse_args()
 
-    if args.inbox:
-        base = datetime.date.fromisoformat(args.date) if args.date else None
-        if base is None:
-            sys.exit("一括モードは --date YYYY-MM-DD（基準日）が必要です（鮮度5日の判定に使用）。")
-        run_batch(args.inbox, base, args.fresh_days, args.engineer, args.note, do_notion=args.notion)
+    if args.inbox or args.source == "imap":
+        base = datetime.date.fromisoformat(args.date) if args.date else \
+            datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date()
+        if args.source == "file" and not args.inbox:
+            sys.exit("--source file では --inbox が必要です（案件の貼り込み）。imap 取得は --source imap。")
+        run_batch(args.inbox, base, args.fresh_days, args.engineer, args.note,
+                  do_notion=args.notion, source=args.source, save_drafts=args.save_drafts)
         return
 
     if not args.subject:

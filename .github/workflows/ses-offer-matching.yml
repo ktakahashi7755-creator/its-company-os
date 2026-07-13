@@ -1,0 +1,58 @@
+name: SES逆方向マッチング（要員→案件）
+
+# ITSのプロパー要員（KN 等）に、contact@（REOorGA受信箱）の案件を当てる逆方向マッチング。
+# 案件を鮮度5日＋要員適合(offer_fit・決定論)で選定 → 提案下書き(.eml/PDF添付) → Notion可視化
+# → sales@ の下書きフォルダへ保存（**送信はしない**）。採点はキーワード決定論のためLLMキー不要。
+
+on:
+  schedule:
+    # 8:35 JST = 23:35 UTC（従来の案件→要員 8:30 と衝突しないよう5分ずらす）。
+    - cron: "35 23 * * *"
+  workflow_dispatch: {}   # 手動実行
+  # --- 一時pushトリガー（動作確認用・確認後に削除する。HANDOVER §10 の手順） ---
+  push:
+    branches: [claude/its-staff-to-project-match-qkjj07]
+    paths:
+      - automation/ses-matching/make_offer_draft.py
+      - .github/workflows/ses-offer-matching.yml
+
+jobs:
+  ses-offer-matching:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r automation/requirements.txt
+      - name: Eval gate (deterministic・APIキー不要・退行検知)
+        run: python automation/ses-matching/eval/run_eval.py --stage all
+      - name: Run offer matching (contact@ IMAP -> 選定 -> 下書き/Notion/sales@下書き)
+        env:
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}                   # 受信サーバ名
+          IMAP_PORT: ${{ vars.IMAP_PORT }}                      # 任意（既定 993）
+          IMAP_USER: ${{ secrets.IMAP_USER }}                   # contact@reorga.co.jp（受信専用）
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}           # ★Secret（コードに書かない）
+          IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}                  # 任意（既定 INBOX）
+          FRESH_DAYS: ${{ vars.FRESH_DAYS }}                    # 任意（既定 5）
+          MAX_FETCH: ${{ vars.MAX_FETCH }}                      # 任意（既定 2500）
+          MSG_BYTES: ${{ vars.MSG_BYTES }}                      # 任意（既定 40000）
+          SALES_FROM: ${{ vars.SALES_FROM }}                   # 任意（既定 sales@its-tokyo.com）
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}             # Notion連携トークン
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}         # ★親ページID（配下に KN案件 YYYY-MM-DD を作成）
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}             # 任意（SES提案トラッカーDBへ行追加）
+          SALES_IMAP_HOST: ${{ secrets.SALES_IMAP_HOST }}       # sales@ の受信サーバ名（下書き保存用）
+          SALES_IMAP_USER: ${{ secrets.SALES_IMAP_USER }}       # 既定 sales@its-tokyo.com
+          SALES_IMAP_PASSWORD: ${{ secrets.SALES_IMAP_PASSWORD }} # ★Secret
+          SALES_IMAP_PORT: ${{ vars.SALES_IMAP_PORT }}          # 任意（既定 993）
+          SALES_DRAFTS_FOLDER: ${{ vars.SALES_DRAFTS_FOLDER }}  # 任意（既定 Drafts／例 INBOX.Drafts）
+        run: >
+          python automation/ses-matching/make_offer_draft.py
+          --source imap --engineer KN --notion --save-drafts
+      - name: Upload offer digest artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ses-offer-digest
+          path: automation/ses-matching/digests/
+          if-no-files-found: ignore

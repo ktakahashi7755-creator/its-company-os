@@ -39,6 +39,21 @@ python make_offer_draft.py --inbox inbox-案件.md --date <今日 YYYY-MM-DD> --
 
 **やらないこと（人間＝代表）**：本命の最終確認と **送信**（`.eml` を sales@ で開いて手動送信・PDF添付は自動済み）。
 
+#### contact@ から直接取り込む（自動・GitHub Actions）
+
+案件を貼らずに、**従来と同じ受信箱 `contact@reorga.co.jp`（REOorGA）から直接**取り込んで選定できる。
+NW/Sec用プレフィルタは通さず、**全件を要員KNの適合(offer_fit)で選定**する（逆方向は案件の型が違うため）。
+
+```bash
+# contact@ から取得 → KN選定 → 下書き.eml → Notion → sales@下書き保存（送信しない）
+python make_offer_draft.py --source imap --engineer KN --notion --save-drafts
+```
+
+- 認証情報（`IMAP_HOST`/`IMAP_PASSWORD` 等）は **GitHub Secrets**。ローカルには置かない＝**実行はActions**。
+- ワークフロー：**`.github/workflows/ses-offer-matching.yml`**（毎朝 8:35 JST／手動実行可）。
+  従来の `ses-matching.yml`（8:30・案件→要員）と別ジョブで**衝突しない**。採点は決定論のため**LLMキー不要**。
+- 出力：`ses-offer-digest` アーティファクト＋Notion『KN案件 YYYY-MM-DD』＋sales@の下書き（`\Draft`）。
+
 ### ② 個別の提案下書きを作る（1案件＝1下書き）
 
 配信メールから **会社名・担当者・件名（と可能なら宛先）** を拾って：
