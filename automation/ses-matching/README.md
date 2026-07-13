@@ -103,7 +103,8 @@ python automation/ses-matching/run_ses_matching.py --source file \
 python automation/ses-matching/run_ses_matching.py --source imap
 ```
 
-**定期実行**：`.github/workflows/ses-matching.yml`（既定 8:30 JST／手動実行可）。
+**定期実行**：`.github/workflows/ses-matching.yml`（cron `0 22 * * *` UTC＝**7:00 JST狙い**／手動実行可）。
+GitHubのschedule起動は遅延しうる（数十分〜1時間超）ため、8:30に手元へ揃うよう7:00狙いにバッファしている。
 digestは成果物(artifact)＋Notionへ。**リポジトリにはコミットしない**（個人情報保護）。
 
 ### 必要な GitHub Secrets / Variables
