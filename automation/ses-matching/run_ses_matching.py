@@ -45,6 +45,7 @@ from email.header import decode_header
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
+_JST = datetime.timezone(datetime.timedelta(hours=9))  # 配信日をJSTの暦日で扱う（鮮度判定の基準と統一・A6）
 
 
 def _env(key, default=None):
@@ -128,22 +129,35 @@ def _decode(s):
     return "".join(out)
 
 
+def _safe_decode(payload, charset):
+    """未知のcharset名(LookupError)でも本文を失わない。latin-1で最終フォールバック（A3）。
+    ※これが無いと不正charsetの1通が本文だけでなくアイテムごと黙って欠落する。"""
+    for enc in (charset, "utf-8"):
+        if not enc:
+            continue
+        try:
+            return payload.decode(enc, "ignore")
+        except (LookupError, TypeError):
+            continue
+    return payload.decode("latin-1", "ignore")  # 全バイト列を受ける最後の砦
+
+
 def _body_text(msg):
     if msg.is_multipart():
         for part in msg.walk():
             if part.get_content_type() == "text/plain":
                 payload = part.get_payload(decode=True)
                 if payload:
-                    return payload.decode(part.get_content_charset() or "utf-8", "ignore")
+                    return _safe_decode(payload, part.get_content_charset())
         # fallback: first text/html stripped
         for part in msg.walk():
             if part.get_content_type() == "text/html":
                 payload = part.get_payload(decode=True)
                 if payload:
-                    return re.sub(r"<[^>]+>", " ", payload.decode(part.get_content_charset() or "utf-8", "ignore"))
+                    return re.sub(r"<[^>]+>", " ", _safe_decode(payload, part.get_content_charset()))
         return ""
     payload = msg.get_payload(decode=True)
-    return payload.decode(msg.get_content_charset() or "utf-8", "ignore") if payload else ""
+    return _safe_decode(payload, msg.get_content_charset()) if payload else ""
 
 
 def fetch_imap(base_date, days):
@@ -205,7 +219,8 @@ def fetch_imap(base_date, days):
                     msg = email.message_from_bytes(entry[1])  # 途中で切れていてもヘッダ/先頭本文は読める
                     frm_name, frm_addr = email.utils.parseaddr(_decode(msg.get("From")))
                     date_tuple = email.utils.parsedate_tz(msg.get("Date") or "")
-                    dt = (datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple)).date()
+                    # 配信日はJST基準日(base_date)と比較するのでJSTの暦日に統一（実行機ローカルtz依存を排除・A6）
+                    dt = (datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple), tz=_JST).date()
                           if date_tuple else None)
                     items.append({
                         "uid": uid,
@@ -216,6 +231,8 @@ def fetch_imap(base_date, days):
                     })
                 except Exception:  # noqa  1通の解析失敗で全体を止めない
                     continue
+    except Exception as e:  # noqa  取得途中の切断/タイムアウトで run 全体を落とさない（A2）
+        print(f"[imap] 取得中にエラー: {type(e).__name__}: {e} → 取得済み {len(items)} 件で継続")
     finally:
         try:
             M.logout()
@@ -297,13 +314,17 @@ def extract_skillsheets(msg):
                 import openpyxl
 
                 wb = openpyxl.load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
-                rows = []
+                rows, total_len = [], 0     # 巨大シートで全行を溜め込まないよう逐次で上限管理（A5）
                 for ws in wb.worksheets:
                     for row in ws.iter_rows(values_only=True):
                         vals = [str(c) for c in row if c not in (None, "")]
                         if vals:
-                            rows.append(" | ".join(vals))
-                    if len("\n".join(rows)) > 8000:
+                            line = " | ".join(vals)
+                            rows.append(line)
+                            total_len += len(line) + 1
+                            if total_len > 8000:
+                                break
+                    if total_len > 8000:
                         break
                 text = "\n".join(rows)[:8000]
         except Exception as e:  # noqa
@@ -581,6 +602,8 @@ def score_with_llm(kept, dropped, base_date):
         s = c.get("src")
         if isinstance(s, str) and s.strip().lstrip("-").isdigit():
             c["src"] = int(s)
+        elif isinstance(s, float):
+            c["src"] = int(s)          # 3.0 等の float も添字に使えるよう正規化（A4）
         bd = c.get("breakdown")
         if isinstance(bd, dict):
             for k, v in list(bd.items()):
@@ -588,6 +611,8 @@ def score_with_llm(kept, dropped, base_date):
                     bd[k] = int(float(v))
                 except (ValueError, TypeError):
                     bd[k] = 0
+        elif bd is not None:           # 配列/文字列など非dictは空扱いに正規化（A1・下流の.values()を守る）
+            c["breakdown"] = {}
     out = {"candidates": cands, "excluded": excl, "note": " / ".join(notes[:5])}
     if not cands and raw:
         out["raw"] = raw
@@ -674,8 +699,8 @@ ROLE_HINTS = ("noreply", "no-reply", "no_reply", "donotreply", "do-not-reply", "
               "newsletter", "unsubscribe", "mailmagazine", "auto-", "automail")
 
 
-def _is_sendable_addr(addr):
-    """提案の宛先に使ってよいアドレスか。REOorGA(受信専用)・自社送信元・ロール系は不可。"""
+def _is_one_sendable(addr):
+    """単一アドレスが宛先に使えるか。REOorGA(受信専用)・自社送信元・ロール系は不可。"""
     a = (addr or "").strip().lower()
     if "@" not in a:
         return False
@@ -687,6 +712,14 @@ def _is_sendable_addr(addr):
     if any(h in local for h in ROLE_HINTS):  # noreply/リスト/自動配信は宛先にしない
         return False
     return True
+
+
+def _is_sendable_addr(addr):
+    """提案の宛先に使ってよい**単一**アドレスか。1:1提案なので複数アドレス(カンマ/セミコロン/
+    空白区切り)は不可＝要確認へ倒す（B1：'contact@reorga.co.jp, x@corp.jp' で最後の@右側だけ見て
+    reorga を見逃す穴、および多重宛先での一斉送信を防ぐ）。"""
+    toks = [t for t in re.split(r"[,;\s]+", (addr or "").strip()) if t]
+    return len(toks) == 1 and _is_one_sendable(toks[0])
 
 
 def extract_contact(from_addr="", body="", subject=""):
@@ -725,8 +758,10 @@ def backfill_contacts(result, kept):
             c["to"] = info["to"]
             if info["sendable"]:                 # 送信可能アドレスのみ保持（reorga等を生成物に残さない・L2）
                 c["to_found"] = info["sendable"]
-        elif not cur:
+        else:
+            # src不明かつ cur が非sendable（reorga/ロール/複数宛先）→ 必ず握り潰す（B4：Notion/digestへ漏らさない）
             c["to"] = "要・宛先確認"
+            c.pop("to_found", None)
 
 
 # ---------- 既提案の重複検知（同一 案件×要員 の再提案を防ぐ） ----------
@@ -947,9 +982,9 @@ def validate_draft(draft, cand=None):
             issues.append(f"From が {SALES_FROM} でない（{m.group(1).strip()[:60]}）")
     else:
         issues.append("From 行が見つからない")
-    # REOorGAは受信専用ドメイン。完全一致だけでなく @reorga.co.jp ドメイン全体を送信物から排除（H3）
+    # REOorGAは受信専用ドメイン。完全一致・サブドメイン(@mail.reorga.co.jp 等)ともに送信物から排除（H3・B3）
     reorga_dom = REOORGA_ADDR.split("@")[-1].lower()
-    if re.search(r"@" + re.escape(reorga_dom), low):
+    if re.search(r"@(?:[a-z0-9\-]+\.)*" + re.escape(reorga_dom), low):
         issues.append(f"🔴 REOorGA受信ドメイン(@{reorga_dom})のアドレスが下書きに混入（送信物に出してはならない）")
     to_m = re.search(r"^\s*to\s*[:：]\s*(.+)$", draft, re.I | re.M)
     if to_m and reorga_dom in to_m.group(1).lower():
@@ -979,6 +1014,8 @@ def write_candidates_json(result, base_date):
 def _fmt_breakdown(c):
     """7軸の内訳を『必須30/鮮度15/…（計93）』形式で。合計とscoreがズレたら⚠️で監査可能に。"""
     bd = c.get("breakdown") or {}
+    if not isinstance(bd, dict):   # LLMが配列/文字列で返しても .values() でrun全滅させない（A1）
+        return "（内訳形式不正）"
     if not bd:
         return "（内訳なし）"
     order = ["必須", "鮮度", "単価", "商流", "タイミング", "見せ方", "継続"]
@@ -1281,7 +1318,13 @@ def _notion_blocks_from_result(result, token=None):
         blocks.append(_nt_block("heading_2", "除外・低"))
         for e in excluded[:20]:
             blocks.append(_nt_block("bulleted_list_item", f"{e.get('item','?')}：{e.get('reason','')}"))
-    return blocks[:95]
+    # Notionは1回のcreateで100ブロックまで。超過分は黙って落とさず、末尾に明示（全件はDB/下書きにある）
+    if len(blocks) > 95:
+        blocks = blocks[:94]
+        blocks.append(_nt_block(
+            "paragraph",
+            "※候補が多く、この日次ページでは一部のみ表示しています。全件は『SES提案トラッカー』DBと sales@ の下書きをご確認ください。"))
+    return blocks
 
 
 def post_notion_page(result, base_date):

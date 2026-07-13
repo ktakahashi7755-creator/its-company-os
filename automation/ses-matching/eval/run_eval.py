@@ -263,6 +263,11 @@ def eval_drafts():
         chk("To空(要確認は入れない)", m2["To"] is None)
         chk("本文に宛先未確定の注記", "宛先未確定" in m2.get_content())
         chk("本文に代表確認フラグ", "代表確認" in m2.get_content())
+    # フェイルクローズ：To が REOorGA なら下書きを作らない（None＋違反理由）。＝送信物にreorgaを出さない最終網
+    c3 = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "X.Y", "company": "配信元",
+          "person": "", "to": "dist@reorga.co.jp", "likelihood": "高"}
+    m3, hard3 = R.build_draft_message(c3)
+    chk("REOorGA宛は下書き化しない(None)", m3 is None and bool(hard3))
     print(f"   MIME組み立て 正解率： {ok}/{tot} = {ok/tot:.2f}")
     return ok == tot
 
@@ -313,7 +318,11 @@ def eval_notiondb():
         ("年齢", p["年齢"]["rich_text"][0]["text"]["content"] == "40歳"),
         ("ステータス既定=未送信", p["ステータス"]["select"]["name"] == "未送信"),
         ("日付", p["日付"]["date"]["start"] == "2026-07-13"),
-        ("score文字列でも数値化", R._db_row_props({"score": "77"}, _dt.date(2026, 7, 13))["スコア"]["number"] in (0, 77)),
+        # 文字列scoreは _db_row_props では数値化されず 0 に落ちる（数値化は上流 score_with_llm の責務）
+        ("文字列scoreは0に落ちる", R._db_row_props({"score": "77"}, _dt.date(2026, 7, 13))["スコア"]["number"] == 0),
+        ("int scoreはそのまま", R._db_row_props({"score": 77}, _dt.date(2026, 7, 13))["スコア"]["number"] == 77),
+        # likelihood空文字→空select名(400)にならず既定『低』へ（レビュー修正の回帰ガード）
+        ("空likelihoodは低に倒れる", R._db_row_props({"likelihood": ""}, _dt.date(2026, 7, 13))["面談通過可能性"]["select"]["name"] == "低"),
     ]
     ok = sum(1 for _, x in checks if x)
     for label, x in checks:
@@ -343,13 +352,140 @@ def eval_robustness():
     # H3: 本文に別の @reorga.co.jp アドレスが混入したら 🔴
     d = "From: sales@its-tokyo.com\nTo: x@y.co.jp\n件名:X\n\n返信先 dist@reorga.co.jp 村山 its-tokyo.com"
     chk("H3 別reorgaアドレスを検出", any("🔴" in x and "reorga" in x for x in R.validate_draft(d)))
-    # L3: Re: の重ね付け除去＋空フォールバック
+    # L3: Re:/Fwd: の重ね付け除去＋空フォールバック（Fwd/Fw/全角/混在も網羅）
     chk("L3 Re:Re:除去", R._fmt_reply_subject("Re: Re: 【NW】A.N") == "【NW】A.N")
     chk("L3 空件名フォールバック", R._fmt_reply_subject("Re:") == "案件ご紹介")
-    # M3: 空・From違反の下書きは validate で違反（＝下書き化されない）
-    chk("M3 空下書きは違反", R.validate_draft("") == ["下書きが空"])
-    chk("M3 From違反を検出", any("From" in x for x in R.validate_draft("From: x@evil.com\n村山 its-tokyo.com")))
+    chk("L3 Fwd:除去", R._fmt_reply_subject("Fwd: 案件") == "案件")
+    chk("L3 Fw:除去", R._fmt_reply_subject("Fw: X") == "X")
+    chk("L3 全角ｒｅ：除去", R._fmt_reply_subject("ｒｅ：案件") == "案件")
+    chk("L3 全角大文字Ｒｅ：除去", R._fmt_reply_subject("Ｒｅ：案件") == "案件")
+    chk("L3 Fwd:+RE:混在除去", R._fmt_reply_subject("Fwd: RE: 案件") == "案件")
+    # A1: breakdown が非dict（配列/文字列/数値）でも _fmt_breakdown が落ちない（run全滅の回帰ガード）
+    for bad in ([30, 15], "abc", 42):
+        chk(f"A1 breakdown非dict({type(bad).__name__})で落ちない", R._fmt_breakdown({"breakdown": bad, "score": 45}) == "（内訳形式不正）")
+    # B3: サブドメインの reorga アドレス（@mail.reorga.co.jp）も validate_draft が検出する
+    d_sub = "From: sales@its-tokyo.com\nTo: x@corp.jp\n件名:X\n\n返信は a@mail.reorga.co.jp へ 村山 its-tokyo.com"
+    chk("B3 サブドメインreorgaを検出", any("REOorGA" in x for x in R.validate_draft(d_sub)))
     print(f"   堅牢性 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
+def eval_backfill():
+    """宛先(To)のデータ層安全化 backfill_contacts を検証（決定論・APIキー不要）。
+    LLMが reorga/ロール/複数宛先を to に入れても、抽出器で上書きし Notion/digest に漏らさない二重ガード。"""
+    print("── 宛先データ層の安全化（backfill_contacts・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    kept = [{"from_addr": "dist@reorga.co.jp", "body": "担当 田中 tanaka@intellect.co.jp", "subject": "【NW】A.N"}]
+    # 1) LLMが reorga を to に → 抽出器で担当アドレスに上書き（reorgaを残さない）
+    res = {"candidates": [{"src": 0, "to": "contact@reorga.co.jp"}]}
+    R.backfill_contacts(res, kept)
+    c = res["candidates"][0]
+    chk("reorga宛を担当アドレスに上書き", c["to"] == "tanaka@intellect.co.jp")
+    chk("reorgaが残らない", "reorga" not in c["to"])
+    chk("src_subjectを保持", c.get("src_subject") == "【NW】A.N")
+    # 2) LLMが妥当な担当アドレス → 保持
+    res2 = {"candidates": [{"src": 0, "to": "tanaka@intellect.co.jp"}]}
+    R.backfill_contacts(res2, kept)
+    chk("妥当アドレスは保持", res2["candidates"][0]["to"] == "tanaka@intellect.co.jp")
+    # 3) src範囲外＋reorga cur → 要確認に握り潰す（B4：KeyErrorで落ちない）
+    res3 = {"candidates": [{"src": 9, "to": "contact@reorga.co.jp"}]}
+    R.backfill_contacts(res3, kept)
+    chk("src範囲外+reorgaは要確認に握り潰す", res3["candidates"][0]["to"] == "要・宛先確認")
+    # 4) 複数宛先（reorga混入・連結）→ 抽出器で単一の担当へ、reorga残さない（B1）
+    res4 = {"candidates": [{"src": 0, "to": "contact@reorga.co.jp, tanaka@intellect.co.jp"}]}
+    R.backfill_contacts(res4, kept)
+    chk("複数宛先(reorga混入)を安全化", res4["candidates"][0]["to"] == "tanaka@intellect.co.jp" and "reorga" not in res4["candidates"][0]["to"])
+    print(f"   宛先安全化 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
+def eval_score_norm():
+    """score_with_llm の応答正規化を**モックLLM**で検証（決定論・APIキー不要）。
+    文字列score/欠落/非dict候補/文字列src/非dict breakdown を正規化し、後段sortが落ちないこと（H1/A1/A4）。"""
+    print("── LLM応答の正規化（score_with_llm・モックLLM・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    orig = R._call_llm
+    R._call_llm = lambda system, user, json_mode=True: (
+        '{"candidates":[{"src":"0","score":"65","breakdown":{"必須":"18","鮮度":15}},'
+        '"notadict",{"src":1.0,"score":null,"breakdown":[1,2]},{"score":"x"}],'
+        '"excluded":["stringnotdict",{"item":"M.R","reason":"両刀足切り"}],"note":"n"}')
+    try:
+        kept = [{"from_name": "", "from_addr": "", "subject": "s0", "date": "2026-07-12", "body": "b0"},
+                {"from_name": "", "from_addr": "", "subject": "s1", "date": "2026-07-12", "body": "b1"}]
+        out = R.score_with_llm(kept, [], BASE_DATE)
+        cands = out["candidates"]
+        chk("非dict候補を除去", all(isinstance(c, dict) for c in cands) and len(cands) == 3)
+        chk("全scoreがint", all(isinstance(c["score"], int) for c in cands))
+        chk("文字列score '65'→65", cands[0]["score"] == 65)
+        chk("null/非数値score→0", cands[1]["score"] == 0 and cands[2]["score"] == 0)
+        chk("文字列src '0'→int0", cands[0]["src"] == 0 and isinstance(cands[0]["src"], int))
+        chk("float src 1.0→int1", cands[1]["src"] == 1 and isinstance(cands[1]["src"], int))
+        chk("dict breakdown値がint", cands[0]["breakdown"]["必須"] == 18)
+        chk("非dict breakdown→{}", cands[1]["breakdown"] == {})
+        chk("excludedの非dictを除去", all(isinstance(e, dict) for e in out["excluded"]))
+        # 後段のsort/内訳整形が例外を出さない
+        try:
+            sorted(cands, key=lambda c: c["score"], reverse=True)
+            for c in cands:
+                R._fmt_breakdown(c)
+            chk("後段sort/内訳整形が落ちない", True)
+        except Exception:
+            chk("後段sort/内訳整形が落ちない", False)
+        # 解析失敗（非JSON）→ 例外なしで空候補＋raw
+        R._call_llm = lambda system, user, json_mode=True: "garbage no json"
+        out2 = R.score_with_llm(kept, [], BASE_DATE)
+        chk("非JSON応答でも例外なし・空候補", out2["candidates"] == [] and "raw" in out2)
+    finally:
+        R._call_llm = orig
+    print(f"   応答正規化 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
+class _FakeM:
+    """_detect_drafts_folder 用の最小 IMAP モック。"""
+    def __init__(self, list_data=None, ok_names=()):
+        self._list_data = list_data
+        self._ok = set(ok_names)
+    def list(self):
+        if self._list_data is None:
+            raise RuntimeError("no list")
+        return ("OK", self._list_data)
+    def select(self, name, readonly=False):
+        return ("OK" if name in self._ok else "NO", [b""])
+
+
+def eval_folder():
+    """_detect_drafts_folder のフォルダ判定を検証（決定論・IMAP不要）。"""
+    print("── 下書きフォルダ判定（_detect_drafts_folder・モックIMAP）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    # SPECIAL-USE \Drafts フラグから INBOX.Drafts を検出
+    m1 = _FakeM(list_data=[b'(\\HasNoChildren \\Drafts) "/" "INBOX.Drafts"'])
+    chk("\\Draftsフラグ→INBOX.Drafts", R._detect_drafts_folder(m1) == "INBOX.Drafts")
+    # フラグ無し→定番名 select フォールバック
+    m2 = _FakeM(list_data=[b'(\\HasNoChildren) "/" "INBOX"'], ok_names=("Drafts",))
+    chk("フラグ無し→Drafts(select成功)", R._detect_drafts_folder(m2) == "Drafts")
+    # list例外＋全select失敗→既定 Drafts
+    m3 = _FakeM(list_data=None, ok_names=())
+    chk("list例外→既定Drafts", R._detect_drafts_folder(m3) == "Drafts")
+    print(f"   フォルダ判定 正解率： {ok}/{tot} = {ok/tot:.2f}")
     return ok == tot
 
 
@@ -357,7 +493,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
-                             "dedup", "robustness", "notiondb", "scoring", "all"],
+                             "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
+                             "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -380,6 +517,12 @@ def main():
         results.append(eval_robustness())
     if args.stage in ("notiondb", "all"):
         results.append(eval_notiondb())
+    if args.stage in ("backfill", "all"):
+        results.append(eval_backfill())
+    if args.stage in ("score_norm", "all"):
+        results.append(eval_score_norm())
+    if args.stage in ("folder", "all"):
+        results.append(eval_folder())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）

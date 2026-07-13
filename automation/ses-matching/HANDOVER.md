@@ -263,6 +263,7 @@ git checkout -B <作業ブランチ> origin/backup/ses-2026-07-13-notiondb-harde
 | 日付 | 版 | 内容 |
 |---|---|---|
 | 2026-07-13 | v1.0 | 初版。設計・アカウント台帳・Secretsレジストリ・復旧/バックアップ/運用/トラブルシュートを整備。Notion DB反映のレビュー4件修正＋本番run #21検証を反映。 |
+| 2026-07-13 | v1.1 | 3視点プロレビューでの徹底ハードニング。中核堅牢性（breakdown非dictでのrun全滅・取得フェーズの例外・未知charsetでの本文欠落 等）とガードレール（連結宛先でのreorga見逃し・サブドメインreorga・宛先の握り潰し漏れ）を修正。eval を9→12決定論ステージに拡充（backfill/score_norm/folder 追加）。詳細は `STATUS.md`。 |
 
 ---
 

@@ -16,3 +16,6 @@
 {"id":"B02","expect_pass":false,"note":"鮮度6日＝境界の外（除外するべき）","date":"2026-07-06","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
 {"id":"B03","expect_pass":true,"note":"件名だけに両刀語（本文は薄い）","date":"2026-07-11","subject":"【募集】ネットワーク兼セキュリティ Cisco/FW/脆弱性","body":"詳細は添付のとおり。ご確認ください。"}
 {"id":"B04","expect_pass":true,"note":"大文字混在（CISCO/FIREWALL）でも成立","date":"2026-07-10","body":"NETWORK design with CISCO and FIREWALL/IDS operations. VULNERABILITY assessment included."}
+{"id":"B05","expect_pass":true,"note":"未来日付＝配信予告は許容（age<0で通過）","date":"2026-07-20","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
+{"id":"B06","expect_pass":true,"note":"不正な日付文字列は鮮度判定をスキップし語のみで判定（例外を出さない）","date":"2026-13-40","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
+{"id":"B07","expect_pass":true,"note":"日付null（Date欠落）でもクラッシュせず語で判定","date":null,"body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}

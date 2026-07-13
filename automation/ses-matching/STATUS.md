@@ -34,6 +34,26 @@
 
 ---
 
+## ✅ 済（2026-07-13）：3視点プロレビューでの徹底ハードニング＋テスト拡充
+
+独立した3視点（中核堅牢性／ガードレール・外部連携／テスト網羅）でプロ品質レビューを実施し、
+確認できた実バグ・穴を全て修正。**評価は9→12決定論ステージに拡充、全緑（exit 0）＋実走(dry-run)確認**。
+
+- **中核堅牢性（run全滅を防ぐ）**：
+  - `_fmt_breakdown`：LLMが `breakdown` を配列/文字列で返すと `.values()` で全採点後にrun全滅していた → 非dictガード＋`score_with_llm`で空dict正規化（A1）。
+  - `fetch_imap`：取得フェーズに `except` が無く、ネットワーク断でパイプライン全滅 → 既取得分を返して継続（A2）。
+  - `_body_text`：未知charset名（LookupError）で正当な1通が丸ごと欠落 → latin-1フォールバックで本文を失わない（A3）。
+  - `src` float／巨大Excelのメモリ／配信日のtz（JST統一）も是正（A4/A5/A6）。
+- **ガードレール（誤送信・情報漏洩を防ぐ）**：
+  - `_is_sendable_addr`：`"contact@reorga.co.jp, x@corp.jp"` のような連結で最後の@右側だけ見て**reorgaを見逃す**穴を修正。1:1提案なので複数宛先は要確認に倒す（B1）。
+  - `validate_draft`：`@mail.reorga.co.jp` のサブドメインreorgaを見逃していた → サブドメインも検出（B3）。
+  - `backfill_contacts`：src不明＋非sendableな `to`（reorga等）が握り潰されずNotion/digestに漏れる経路を封鎖（B4）。
+  - ※スキルシート原本のNotionアップロードは**代表の明示要望どおりの仕様**（Notionが閲覧面）。非変更。
+- **Notion日次ページ**：候補が多い日に `blocks[:95]` で末尾が黙って落ちていた → 省略を明示（全件はDB/下書きに）。
+- **テスト拡充**：新ステージ3つ（`backfill` 宛先安全化6/6・`score_norm` モックLLMで応答正規化11/11・`folder` 下書きフォルダ判定3/3）。
+  既存も強化（`notiondb` の空アサート是正・`robustness` に件名/breakdown/サブドメインreorga・`drafts` にフェイルクローズ・prefilterに未来日/不正日/null日）。
+  → 毎朝のeval gateが `--stage all` で自動回帰チェック（本番Notion反映前に論理破綻を止める）。
+
 ## ✅ 済（2026-07-13）：Notion DB反映のハードニング（レビュー2巡目・4件）＋本番検証
 
 - 独立レビュー2巡目の指摘4件を修正（PR #35・`fix(ses): Notion DB反映のレビュー指摘4件`）：
