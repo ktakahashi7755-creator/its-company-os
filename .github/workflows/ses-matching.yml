@@ -2,8 +2,10 @@ name: SES自動マッチング
 
 on:
   schedule:
-    # GitHub ActionsのcronはUTC。8:30 JST = 23:30 UTC（前日）。
-    - cron: "30 23 * * *"
+    # GitHub ActionsのcronはUTC。7:00 JST = 22:00 UTC（前日）。
+    # ★狙いを7:00 JSTに前倒し。GitHubのschedule起動は数十分〜1時間超遅延することがあり、
+    #   その遅延を見込んでも「8:30までに手元（Notion / sales@ Drafts）に揃う」ためのバッファ。
+    - cron: "0 22 * * *"
   workflow_dispatch: {}   # 手動実行（テスト用）
 
 jobs:

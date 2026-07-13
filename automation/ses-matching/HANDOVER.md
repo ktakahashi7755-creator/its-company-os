@@ -21,7 +21,7 @@
 **やること（自動）**：収集 → 絞り込み → 採点 → 下書き生成 → Notion反映 → sales@下書き保存。
 **やらないこと（人間＝代表）**：要員の最終確認と **メール送信**。**送信は絶対に自動化しない**（スパム判定・商流毀損・ソース露見を避けるため）。
 
-毎朝 **8:30 JST** に GitHub Actions が全自動実行。代表は Notion か sales@ の下書きを見て、良ければ1社ずつ手で送るだけ。
+毎朝 **7:00 JST狙い**（8:30までに手元へ揃うようバッファ）に GitHub Actions が全自動実行。代表は Notion か sales@ の下書きを見て、良ければ1社ずつ手で送るだけ。
 
 ---
 
@@ -100,7 +100,7 @@ flowchart TD
 | 採点AI | OpenAI | model `gpt-4o-mini` | OpenAI Platform | Anthropic `claude-sonnet-4-6` でも可（どちらか一方）。 |
 | Notion 親ページ | ITS-OS | `38244f16641f80d49a45cfae344184ea` | Notion | 配下に日次候補ページを自動作成。 |
 | Notion DB | SES提案トラッカー | `39b44f16-641f-8127-abf5-fa44f8ffe335` | Notion | 送信ステータス管理（§9）。 |
-| 実行基盤 | GitHub Actions | `.github/workflows/ses-matching.yml` | GitHub | cron `30 23 * * *` UTC＝**8:30 JST**。手動実行可。 |
+| 実行基盤 | GitHub Actions | `.github/workflows/ses-matching.yml` | GitHub | cron `0 22 * * *` UTC＝**7:00 JST狙い**（遅延を見込み8:30着を狙うバッファ）。手動実行可。 |
 | コード本体 | GitHubリポジトリ | `ktakahashi7755-creator/its-company-os` | GitHub | 既定ブランチ `claude/focused-bell-kt8d7o`。 |
 
 > ID（Notionページ/DBのid）は秘密ではないので本書に記載してよい。**秘密は「トークン・パスワード・APIキーの値」だけ**で、
@@ -192,7 +192,7 @@ git checkout -B <作業ブランチ> origin/backup/ses-2026-07-13-notiondb-harde
 ## 9. 運用ランブック（日次・確認・DB）
 
 ### 日次の流れ
-1. **8:30 JST に自動実行**（何もしなくてよい）。
+1. **7:00 JST狙いに自動実行**（GitHubの遅延を見込み、8:30までに手元へ揃うようバッファ。何もしなくてよい）。
 2. 代表は **Notion「SES提案トラッカー」DB** か **sales@ の下書き** を開く。
 3. 送る相手を決め、**sales@ の下書きを開いて1社ずつ手動送信**。
 4. 送ったらDBの **ステータスを `送信済`** に変更（未送信ビューから自動的に消える）。見送りは `見送り`。
