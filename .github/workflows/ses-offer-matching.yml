@@ -10,7 +10,18 @@ on:
   schedule:
     # 8:35 JST = 23:35 UTC（従来の案件→要員 8:30 と衝突しないよう5分ずらす）。
     - cron: "35 23 * * *"
-  workflow_dispatch: {}   # 手動実行（検証はこちらで1回ずつ・氾濫防止のガード入り）
+  workflow_dispatch:
+    # 手動実行。**既定は書き込みなし（digestアーティファクトのみ）＝安全側**。
+    # まず既定で件数を確認 → 健全なら write_notion / save_drafts を true にして本番反映。
+    inputs:
+      write_notion:
+        description: "Notionに反映する（KN案件ページ＋提案トラッカーDB行）"
+        type: boolean
+        default: false
+      save_drafts:
+        description: "sales@ の下書きフォルダに保存する（PDF添付・送信はしない）"
+        type: boolean
+        default: false
 
 jobs:
   ses-offer-matching:
@@ -25,6 +36,9 @@ jobs:
         run: python automation/ses-matching/eval/run_eval.py --stage all
       - name: Run offer matching (contact@ IMAP -> 選定 -> 下書き/Notion/sales@下書き)
         env:
+          # 書き込みトグル（dispatch入力／schedule時は空＝安全側で書き込みなし。cron有効化時に既定を見直す）
+          WRITE_NOTION: ${{ inputs.write_notion }}
+          SAVE_DRAFTS: ${{ inputs.save_drafts }}
           IMAP_HOST: ${{ secrets.IMAP_HOST }}                   # 受信サーバ名
           IMAP_PORT: ${{ vars.IMAP_PORT }}                      # 任意（既定 993）
           IMAP_USER: ${{ secrets.IMAP_USER }}                   # contact@reorga.co.jp（受信専用）
@@ -43,9 +57,12 @@ jobs:
           SALES_IMAP_PASSWORD: ${{ secrets.SALES_IMAP_PASSWORD }} # ★Secret
           SALES_IMAP_PORT: ${{ vars.SALES_IMAP_PORT }}          # 任意（既定 993）
           SALES_DRAFTS_FOLDER: ${{ vars.SALES_DRAFTS_FOLDER }}  # 任意（既定 Drafts／例 INBOX.Drafts）
-        run: >
-          python automation/ses-matching/make_offer_draft.py
-          --source imap --engineer KN --notion --save-drafts
+        run: |
+          ARGS="--source imap --engineer KN"
+          [ "$WRITE_NOTION" = "true" ] && ARGS="$ARGS --notion"
+          [ "$SAVE_DRAFTS" = "true" ] && ARGS="$ARGS --save-drafts"
+          echo "[run] make_offer_draft.py $ARGS"
+          python automation/ses-matching/make_offer_draft.py $ARGS
       - name: Upload offer digest artifact
         if: always()
         uses: actions/upload-artifact@v4
