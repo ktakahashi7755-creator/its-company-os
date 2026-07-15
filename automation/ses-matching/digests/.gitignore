@@ -4,5 +4,6 @@ candidates-*.json
 proposed-log.jsonl
 drafts-log.jsonl
 notion-db-id.txt
+imap-watermark.txt
 !.gitignore
 !README.md

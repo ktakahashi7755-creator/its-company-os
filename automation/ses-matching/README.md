@@ -103,8 +103,15 @@ python automation/ses-matching/run_ses_matching.py --source file \
 python automation/ses-matching/run_ses_matching.py --source imap
 ```
 
-**定期実行**：`.github/workflows/ses-matching.yml`（cron `0 22 * * *` UTC＝**7:00 JST狙い**／手動実行可）。
-GitHubのschedule起動は遅延しうる（数十分〜1時間超）ため、8:30に手元へ揃うよう7:00狙いにバッファしている。
+**定期実行（2系統）**：
+- **毎朝の全採点（安全網）**：`.github/workflows/ses-matching.yml`（cron `0 22 * * *` UTC＝**7:00 JST狙い**／手動実行可）。
+  5日窓を全採点。GitHubのschedule起動は遅延しうる（数十分〜1時間超）ため、8:30に手元へ揃うよう7:00狙いにバッファ。
+- **配信即マッチング（ポーリング＝プロアクティブ・ループ）**：`.github/workflows/ses-matching-poll.yml`
+  （cron `*/30 22-23,0-11 * * *` UTC＝**JST 7:00–20:30を30分毎**／夜間停止でActions分数節約）。
+  `run_ses_matching.py --source imap --incremental` で **新着（前回UIDより後）だけ採点**＝コスト最小。
+  ウォーターマーク（`digests/imap-watermark.txt`）は `actions/cache` で実行跨ぎ保持。cache失効時は初回扱い＝
+  バックログを採点せずbaseline初期化で安全に立ち上がる。**"即時"ではなく"数十分以内"**（GitHub scheduleの遅延特性）。
+
 digestは成果物(artifact)＋Notionへ。**リポジトリにはコミットしない**（個人情報保護）。
 
 ### 必要な GitHub Secrets / Variables

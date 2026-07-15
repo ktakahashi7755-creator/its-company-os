@@ -1,0 +1,74 @@
+name: SES自動マッチング（ポーリング＝配信即マッチング）
+
+# 「配信が来たら（概ね数十分で）下書きが揃う」プロアクティブ・ループ。
+# 新インフラ無しで実現するため、営業時間帯に短間隔ポーリング＋UIDウォーターマーク（新着だけ採点）で回す。
+# 毎朝7:00の full 実行（ses-matching.yml）は 5日窓を全採点する安全網として別途そのまま残す。
+#
+# ⚠️ GitHubのscheduleは起動保証が無く数十分ズレる（＝“即時”ではなく“数十分以内”）。真のプッシュ即時が要る場合は
+#    メール→webhook→repository_dispatch の外部経路（Cloudflare Email Worker 等）が必要＝Phase 0では固定費増のため見送り。
+
+on:
+  schedule:
+    # UTC。JST 7:00–20:30 をカバー（22:00–11:30 UTC）で30分毎。夜間(JST21–翌6時)は停止＝Actions分数の節約。
+    - cron: "*/30 22-23,0-11 * * *"
+  workflow_dispatch: {}   # 手動実行
+
+# 前の実行が走っている間は新規を待たせる（ウォーターマーク/下書きへの二重処理を防ぐ）。
+concurrency:
+  group: ses-matching-poll
+  cancel-in-progress: false
+
+jobs:
+  ses-matching-poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r automation/requirements.txt
+      # ウォーターマーク／dedupログを実行跨ぎで保持（digestsはgitに載せない＝毎回新規checkoutのため）。
+      # run_id で常に新キーで保存し、restore-keys の前方一致で「直近の状態」を復元するローリング方式。
+      # cacheが無い/失効した場合は初回扱い（baseline初期化＝バックログを採点せずスキップ）で安全に立ち上がる。
+      - name: Restore SES state (watermark/dedup logs)
+        uses: actions/cache@v4
+        with:
+          path: automation/ses-matching/digests
+          key: ses-poll-state-${{ github.run_id }}
+          restore-keys: |
+            ses-poll-state-
+      - name: Eval gate (deterministic・APIキー不要・退行検知)
+        run: python automation/ses-matching/eval/run_eval.py --stage all
+      - name: Run SES matching (incremental＝新着だけ採点)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ vars.IMAP_PORT }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+          IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}
+          FRESH_DAYS: ${{ vars.FRESH_DAYS }}
+          MAX_FETCH: ${{ vars.MAX_FETCH }}
+          MSG_BYTES: ${{ vars.MSG_BYTES }}
+          STAGE2_MAX: ${{ vars.STAGE2_MAX }}
+          SALES_FROM: ${{ vars.SALES_FROM }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          SALES_IMAP_HOST: ${{ secrets.SALES_IMAP_HOST }}
+          SALES_IMAP_USER: ${{ secrets.SALES_IMAP_USER }}
+          SALES_IMAP_PASSWORD: ${{ secrets.SALES_IMAP_PASSWORD }}
+          SALES_IMAP_PORT: ${{ vars.SALES_IMAP_PORT }}
+          SALES_DRAFTS_FOLDER: ${{ vars.SALES_DRAFTS_FOLDER }}
+        run: python automation/ses-matching/run_ses_matching.py --source imap --incremental
+      - name: Upload digest artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ses-digest-poll
+          path: automation/ses-matching/digests/
+          if-no-files-found: ignore
