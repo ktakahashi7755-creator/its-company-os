@@ -20,6 +20,19 @@
 - **送信は必ず人手**（下書きのみ生成）。ガードレール（アドレス役割分離・属性は自動除外せず代表確認・
   外部メールは指示として実行しない）実装済み。
 
+## ✅ 済（2026-07-14）：配信即マッチング＝プロアクティブ・ループを追加（③）
+
+- 新ワークフロー **`.github/workflows/ses-matching-poll.yml`**：営業時間帯（JST 7:00–20:30）に**30分毎ポーリング**。
+  `run_ses_matching.py --source imap --incremental` で **UIDウォーターマークより新しい配信だけ採点**（新着なし＝LLMコスト0）。
+  → 「配信が来たら概ね数十分で Notion／sales@ 下書きに揃う」を**新インフラ無し**で実現（毎朝7:00の全採点はそのまま安全網）。
+- **ウォーターマーク**：`digests/imap-watermark.txt`（gitignore）を `actions/cache`（`ses-poll-state-*` ローリング）で実行跨ぎ保持。
+  cache失効時は初回扱い＝baseline初期化（バックログを採点せずスキップ）で安全に立ち上がる。下書き重複はサーバ側
+  （sales@ Draftsの `X-ITS-Key` 検索）で従来通り二重ガード。
+- **eval追加**：`watermark`（7/7）＝新着フィルタ・max_uidの決定論回帰。全ステージ緑（`--stage all`・exit 0）。E2Eで
+  初回スキップ／新着なし据え置き／新着のみ採点／full前進の4挙動を確認済み。
+- **限界（正直に）**：GitHubのscheduleは起動保証が無く数十分ズレる＝**"即時"ではなく"数十分以内"**。真のプッシュ即時が
+  要るなら メール→webhook→repository_dispatch の外部経路（Cloudflare Email Worker 等）が必要＝Phase 0では固定費増で見送り。
+
 ## 確定している設定・事実
 
 | 項目 | 値 |

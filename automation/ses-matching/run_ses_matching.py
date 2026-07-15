@@ -769,6 +769,65 @@ def _dupe_key(case, engineer):
     return (str(case or "").strip(), str(engineer or "").strip())
 
 
+def _watermark_path():
+    return os.path.join(HERE, "digests", "imap-watermark.txt")
+
+
+def read_watermark():
+    """前回処理済みの最大UIDを返す（初回＝ファイル無しは None）。digests/imap-watermark.txt・gitignore。"""
+    path = _watermark_path()
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            v = f.read().strip()
+        return int(v) if v else None
+    except (ValueError, OSError):
+        return None  # 壊れていたら「未設定」扱い（安全側＝取りこぼしより再処理／重複はdedupが吸収）
+
+
+def write_watermark(uid):
+    """処理済み最大UIDを保存（数値のみ）。None/非数値は書かない。"""
+    if uid is None:
+        return
+    try:
+        u = int(uid)
+    except (TypeError, ValueError):
+        return
+    path = _watermark_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(str(u))
+
+
+def _uid_int(item):
+    """items の uid を int 化。取れなければ None（比較不能＝新着側に倒して取りこぼさない）。"""
+    try:
+        return int(item.get("uid"))
+    except (TypeError, ValueError):
+        return None
+
+
+def max_uid(items):
+    """items 中の最大UID（数値）。無ければ None。"""
+    uids = [u for u in (_uid_int(i) for i in items) if u is not None]
+    return max(uids) if uids else None
+
+
+def filter_new_by_uid(items, watermark):
+    """UIDが watermark より新しいメールだけを返す（イベント駆動＝新着のみ採点でコスト最小化）。
+    watermark が None なら全件（初回の扱いは呼び出し側で決める）。UID不明の item は
+    取りこぼしを避けるため新着側に含める（下流のdedupが重複下書きを防ぐ）。純粋関数。"""
+    if watermark is None:
+        return list(items)
+    out = []
+    for it in items:
+        u = _uid_int(it)
+        if u is None or u > watermark:
+            out.append(it)
+    return out
+
+
 def load_proposed():
     """既提案ログ（digests/proposed-log.jsonl・gitignore）から (案件,要員) 集合を読む。"""
     path = os.path.join(HERE, "digests", "proposed-log.jsonl")
@@ -1362,7 +1421,12 @@ def main():
     ap.add_argument("--input2", default=None, help="2つ目のinbox（要員など）")
     ap.add_argument("--date", default=None, help="基準日 YYYY-MM-DD（省略時は本日JST）")
     ap.add_argument("--dry-run", action="store_true", help="APIを使わずプレフィルタまで確認")
+    ap.add_argument("--incremental", action="store_true",
+                    help="イベント駆動ポーリング用：前回処理済みUIDより新しい配信だけを採点（新着なしはコスト0）")
     args = ap.parse_args()
+    # 環境変数でも有効化可（ワークフローから INCREMENTAL=1）
+    if _env("INCREMENTAL", "").strip() in ("1", "true", "True", "yes"):
+        args.incremental = True
 
     base_date = (datetime.date.fromisoformat(args.date) if args.date
                  else datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date())
@@ -1374,6 +1438,26 @@ def main():
         if args.input2:
             paths.append(args.input2)
         items = load_from_files(paths)
+
+    # イベント駆動（ポーリング＋UIDウォーターマーク）：新着だけ採点しコストを最小化する。
+    # 末尾で watermark を前進させるため、今回見た窓の最大UIDを先に控える（全モード共通）。
+    wm_to_write = max_uid(items) if args.source == "imap" else None
+    incremental = args.incremental and args.source == "imap"
+    if incremental:
+        wm = read_watermark()
+        if wm is None:
+            # 初回はバックログ全採点を避けるため、基準UIDだけ据えて今回は何もしない。
+            # （その日の全件は毎朝の full 実行が拾う。ポーリングは以後の新着だけを担当。）
+            write_watermark(wm_to_write)
+            print(f"[incr] 初回：ウォーターマークを {wm_to_write} に初期化（今回はバックログを採点せずスキップ）")
+            return
+        before = len(items)
+        items = filter_new_by_uid(items, wm)
+        print(f"[incr] 新着フィルタ：取り込み {before} 件中 新着 {len(items)} 件（watermark={wm}）")
+        if not items:
+            print("[incr] 新着なし → 採点スキップ（LLMコスト0）。")
+            write_watermark(max(wm, wm_to_write or wm))
+            return
 
     kept, dropped = prefilter(items, base_date, FRESH_DAYS)
     # 除外理由は件数サマリのみ（大量ログを避ける）
@@ -1439,6 +1523,10 @@ def main():
         save_drafts_to_sales(result, base_date)
     except Exception as e:  # noqa  下書き保存の失敗は本体を止めない
         print(f"[drafts] スキップ（エラー）: {e}")
+    # 正常処理の最後にウォーターマークを前進（毎朝fullも前進させ、以後のポーリングを軽くする）。
+    # 後退させない（他実行が先に進めていた場合の巻き戻り防止）。imap時のみ・crash時は前進しない＝取りこぼし防止。
+    if args.source == "imap" and wm_to_write is not None:
+        write_watermark(max(read_watermark() or 0, wm_to_write))
 
 
 if __name__ == "__main__":

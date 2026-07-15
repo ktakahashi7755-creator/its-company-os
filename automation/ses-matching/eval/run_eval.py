@@ -489,12 +489,45 @@ def eval_folder():
     return ok == tot
 
 
+def eval_watermark():
+    """イベント駆動の新着フィルタ（filter_new_by_uid / max_uid）を検証（決定論・IMAP不要）。
+    ここが壊れると、ポーリングで①新着を取りこぼす or ②既処理を再採点してコスト暴発、が起きる。"""
+    print("── UIDウォーターマーク新着フィルタ（filter_new_by_uid・max_uid）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    def it(uid):
+        return {"uid": uid, "body": "x"}
+
+    items = [it("90"), it("100"), it("101"), it("150")]
+    # watermark=100 → 100含む以前は除外、101/150だけ新着（厳密に大きいもの）
+    new = R.filter_new_by_uid(items, 100)
+    chk("watermark=100→新着は101,150", [i["uid"] for i in new] == ["101", "150"])
+    # watermark=None（初回）→全件
+    chk("watermark=None→全件", len(R.filter_new_by_uid(items, None)) == 4)
+    # 最新以上のwatermark→新着ゼロ（＝新着なし→採点スキップ→コスト0の経路）
+    chk("watermark=150→新着ゼロ", R.filter_new_by_uid(items, 150) == [])
+    # UID欠落は取りこぼし回避で新着側に含める（下流dedupが重複下書きを防ぐ）
+    chk("UID欠落は新着側に含める", len(R.filter_new_by_uid([it(None), it("50")], 100)) == 1
+        and R.filter_new_by_uid([it(None), it("50")], 100)[0]["uid"] is None)
+    # max_uid：数値のみ・非数値/None無視
+    chk("max_uid=最大の数値", R.max_uid([it("5"), it("42"), it("7")]) == 42)
+    chk("max_uid：非数値/Noneを無視", R.max_uid([it(None), it("abc"), it("9")]) == 9)
+    chk("max_uid：数値ゼロ件→None", R.max_uid([it(None), it("abc")]) is None)
+    print(f"   新着フィルタ 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
-                             "scoring", "all"],
+                             "watermark", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -523,6 +556,8 @@ def main():
         results.append(eval_score_norm())
     if args.stage in ("folder", "all"):
         results.append(eval_folder())
+    if args.stage in ("watermark", "all"):
+        results.append(eval_watermark())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）

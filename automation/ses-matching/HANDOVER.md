@@ -100,7 +100,8 @@ flowchart TD
 | 採点AI | OpenAI | model `gpt-4o-mini` | OpenAI Platform | Anthropic `claude-sonnet-4-6` でも可（どちらか一方）。 |
 | Notion 親ページ | ITS-OS | `38244f16641f80d49a45cfae344184ea` | Notion | 配下に日次候補ページを自動作成。 |
 | Notion DB | SES提案トラッカー | `39b44f16-641f-8127-abf5-fa44f8ffe335` | Notion | 送信ステータス管理（§9）。 |
-| 実行基盤 | GitHub Actions | `.github/workflows/ses-matching.yml` | GitHub | cron `0 22 * * *` UTC＝**7:00 JST狙い**（遅延を見込み8:30着を狙うバッファ）。手動実行可。 |
+| 実行基盤（全採点=安全網） | GitHub Actions | `.github/workflows/ses-matching.yml` | GitHub | cron `0 22 * * *` UTC＝**7:00 JST狙い**（遅延を見込み8:30着を狙うバッファ）。5日窓を全採点。手動実行可。 |
+| 実行基盤（配信即マッチ=ポーリング） | GitHub Actions | `.github/workflows/ses-matching-poll.yml` | GitHub | cron `*/30 22-23,0-11 * * *` UTC＝**JST7:00–20:30を30分毎**。`--incremental`で新着だけ採点。ウォーターマーク(`digests/imap-watermark.txt`)を`actions/cache`で保持。手動実行可。 |
 | コード本体 | GitHubリポジトリ | `ktakahashi7755-creator/its-company-os` | GitHub | 既定ブランチ `claude/focused-bell-kt8d7o`。 |
 
 > ID（Notionページ/DBのid）は秘密ではないので本書に記載してよい。**秘密は「トークン・パスワード・APIキーの値」だけ**で、
