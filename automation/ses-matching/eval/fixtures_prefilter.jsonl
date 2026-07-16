@@ -19,3 +19,9 @@
 {"id":"B05","expect_pass":true,"note":"未来日付＝配信予告は許容（age<0で通過）","date":"2026-07-20","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
 {"id":"B06","expect_pass":true,"note":"不正な日付文字列は鮮度判定をスキップし語のみで判定（例外を出さない）","date":"2026-13-40","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
 {"id":"B07","expect_pass":true,"note":"日付null（Date欠落）でもクラッシュせず語で判定","date":null,"body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
+{"id":"P07","expect_pass":true,"note":"recall：新同義語での両刀（VPN/SD-WAN × EDR/SIEM）。旧語彙では取りこぼす","date":"2026-07-12","body":"VPN/SD-WAN設計・構築とEDR/SIEM運用。インフラ横断。希望78万。8月〜。"}
+{"id":"P08","expect_pass":true,"note":"recall：新同義語での両刀（ルーター/無線LAN × ゼロトラスト/サイバー）","date":"2026-07-11","body":"ルーター・無線LAN構築とゼロトラスト/サイバー対策の設計運用。PL経験。希望85万。"}
+{"id":"P09","expect_pass":true,"note":"recall：BGP/OSPF × WAF/インシデント の両刀","date":"2026-07-10","body":"BGP/OSPFルーティング設計とWAF導入・インシデント対応。常駐可。希望80万。"}
+{"id":"N09","expect_pass":false,"note":"FPガード：純NW（VPN/SD-WANのみ・Sec語なし）は落とす","date":"2026-07-11","body":"VPN/SD-WANとルーター・スイッチング設計構築。監視のみ。〜80万。"}
+{"id":"N10","expect_pass":false,"note":"FPガード：純Sec（EDR/SIEM専任・NW語なし）は落とす","date":"2026-07-11","body":"EDR/SIEM運用とインシデント対応の専任。脆弱性診断が主。〜75万。"}
+{"id":"N11","expect_pass":false,"note":"FPガード：純Sec本文中の'plan'で'lan'を誤検出しない（語境界）。NW語は一切含めない","body":"EDR and SIEM operations only. The plan is incident response and endpoint hardening.","date":"2026-07-11"}
