@@ -95,6 +95,7 @@ def _eval_scoring_inner():
              for r in rows]
     kept, dropped = R.prefilter(items, BASE_DATE, R.FRESH_DAYS)
     result = R.score_with_llm(kept, dropped, BASE_DATE)
+    R.reconcile_scores(result)  # 本番と同じ自己整合化（score＝内訳合計・帯導出・<60除外）後の帯を計測する
     # src→候補 / src→除外 を引けるよう対応表を作る（kept は元 items の部分集合）
     kept_bodies = {id(k): i for i, k in enumerate(kept)}  # 未使用だが将来の対応付け用
     band_by_body = {}
@@ -489,6 +490,62 @@ def eval_folder():
     return ok == tot
 
 
+def eval_reconcile():
+    """採点の自己整合化（reconcile_scores / band_from_score）を検証（決定論・APIキー不要）。
+    ここが精度の核心：score＝内訳合計・帯をscoreから導出・score<60のジャンク候補を除外へ。"""
+    print("── 採点の自己整合化（reconcile_scores・band_from_score）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    # 帯の閾値（scoring.md：高80+／中60-79／除外<60）
+    chk("band 80→高", R.band_from_score(80) == "高")
+    chk("band 79→中", R.band_from_score(79) == "中")
+    chk("band 60→中", R.band_from_score(60) == "中")
+    chk("band 59→除外", R.band_from_score(59) == "除外")
+
+    # 内訳合計＝score に確定（『内訳≠score』根絶）。各軸は上限クランプ。
+    full = {"必須": 28, "鮮度": 15, "単価": 15, "商流": 15, "タイミング": 10, "見せ方": 7, "継続": 2}
+    r = R.reconcile_scores({"candidates": [{"engineer": "A", "case": "X", "score": 0,
+                                            "likelihood": "低", "breakdown": dict(full)}]})
+    c0 = r["candidates"][0]
+    chk("score＝内訳合計(92)に確定", c0["score"] == 92)
+    chk("帯を高に上書き（自己申告『低』を無視）", c0["likelihood"] == "高")
+
+    # 軸の上限超えはクランプ（必須40→30・見せ方99→10）してから合算
+    over = {"必須": 40, "鮮度": 15, "単価": 15, "商流": 15, "タイミング": 10, "見せ方": 99, "継続": 5}
+    r = R.reconcile_scores({"candidates": [{"engineer": "B", "case": "X", "score": 200, "breakdown": over}]})
+    chk("軸上限クランプ後の合計(100)", r["candidates"][0]["score"] == 30 + 15 + 15 + 15 + 10 + 10 + 5)
+
+    # score<60 のジャンク候補は candidates から除外へ移動（下書き漏れ根絶）
+    low = {"必須": 10, "鮮度": 15, "単価": 10, "商流": 8, "タイミング": 5, "見せ方": 2, "継続": 0}  # =50
+    res = R.reconcile_scores({"candidates": [
+        {"engineer": "C", "case": "X", "score": 88, "likelihood": "高",
+         "breakdown": {"必須": 28, "鮮度": 15, "単価": 15, "商流": 12, "タイミング": 10, "見せ方": 6, "継続": 2}},
+        {"engineer": "D", "case": "X", "score": 0, "likelihood": "低", "breakdown": dict(low)}],
+        "excluded": []})
+    chk("候補は高得点1件のみ残る", [c["engineer"] for c in res["candidates"]] == ["C"])
+    chk("score<60は excluded へ移動", any("D ×" in e.get("item", "") for e in res["excluded"]))
+
+    # 属性フラグ（代表確認）付きでも score<60 は除外（貴重な両刀は高得点で残る＝別ケース）
+    res = R.reconcile_scores({"candidates": [
+        {"engineer": "E", "case": "X", "score": 0, "flags": ["年齢上限超・代表確認"],
+         "breakdown": {"必須": 12, "鮮度": 15, "単価": 10, "商流": 8, "タイミング": 5, "見せ方": 2, "継続": 0}}],
+        "excluded": []})
+    chk("flag付きでもscore<60は除外へ", res["candidates"] == []
+        and any("代表確認フラグ有" in e.get("reason", "") for e in res["excluded"]))
+
+    # breakdownが不完全（7軸揃わない）なら既存scoreをクランプして帯判定（落とさない）
+    res = R.reconcile_scores({"candidates": [{"engineer": "F", "case": "X", "score": 150, "breakdown": {"必須": 30}}]})
+    chk("不完全breakdownはscoreクランプ(100)で残す", res["candidates"] and res["candidates"][0]["score"] == 100)
+
+    print(f"   自己整合化 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def eval_watermark():
     """イベント駆動の新着フィルタ（filter_new_by_uid / max_uid）を検証（決定論・IMAP不要）。
     ここが壊れると、ポーリングで①新着を取りこぼす or ②既処理を再採点してコスト暴発、が起きる。"""
@@ -527,7 +584,7 @@ def main():
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
-                             "watermark", "scoring", "all"],
+                             "watermark", "reconcile", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -558,6 +615,8 @@ def main():
         results.append(eval_folder())
     if args.stage in ("watermark", "all"):
         results.append(eval_watermark())
+    if args.stage in ("reconcile", "all"):
+        results.append(eval_reconcile())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）

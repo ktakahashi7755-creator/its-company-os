@@ -73,12 +73,17 @@ PREFILTER_KEYWORDS = [
 # 現在のアクティブ案件＝遊技機NW/Sec は「ネットワーク AND セキュリティ」の両刀が必須。
 # → NW群とSec群の両方にヒットする要員だけを通し、両刀人材を的確に絞る。空リストにすると無効。
 PREFILTER_GROUPS = [
-    # ネットワーク群
-    ["ネットワーク", "network", "nw", "cisco", "aruba", "yamaha", "f5", "juniper",
-     "ルーティング", "スイッチ", "ロードバランサ", "l2", "l3"],
-    # セキュリティ群
+    # ネットワーク群（recall向け同義語を拡充。ASCII語は _kw_pattern の語境界一致で誤爆を防ぐ）
+    ["ネットワーク", "network", "nw", "cisco", "aruba", "yamaha", "f5", "juniper", "arista",
+     "ルーティング", "ルーター", "ルータ", "スイッチ", "スイッチング", "ロードバランサ", "負荷分散",
+     "l2", "l3", "lan", "wan", "vlan", "vpn", "bgp", "ospf", "sd-wan", "sdwan", "proxy", "router",
+     "無線", "wi-fi", "wifi", "回線", "tcp/ip"],
+    # セキュリティ群（同上。監視/monitoringは"NW監視"と混同するため入れない＝精度維持）
     ["セキュリティ", "security", "ファイアウォール", "firewall", "fw", "utm",
-     "ids", "ips", "脆弱", "soc", "waf", "paloalto", "palo alto", "fortigate", "fortinet"],
+     "ids", "ips", "脆弱", "soc", "waf", "edr", "xdr", "siem", "soar", "casb",
+     "paloalto", "palo alto", "fortigate", "fortinet", "trellix", "crowdstrike",
+     "サイバー", "ゼロトラスト", "インシデント", "マルウェア", "不正アクセス", "侵入検知",
+     "ペネトレ", "情報漏洩", "認証基盤", "wpa"],
 ]
 
 # 採点で必須の設計ファイルだけ（プロンプト肥大／TPM超過を避ける）。ガードレールはSYSTEM_PROMPTに内蔵。
@@ -439,8 +444,10 @@ def prefilter(items, base_date, days):
             except ValueError:
                 pass
         low = (it["body"] + " " + it.get("subject", "")).lower()
-        # 広い門：どれか1語（ASCII語は語境界一致で誤爆を防ぐ）
-        if reason is None and PREFILTER_KEYWORDS:
+        # 広い門：どれか1語（ASCII語は語境界一致で誤爆を防ぐ）。
+        # ※案件特化グループ（両刀等）がある時は群が厳格な唯一のゲート。広い門は群より狭くなり
+        #   群ヒット語を取りこぼすため**バイパス**する（recall優先・精度は群のAND-of-ORが担保）。
+        if reason is None and PREFILTER_KEYWORDS and not PREFILTER_GROUPS:
             if not any(_kw_hit(k, low) for k in PREFILTER_KEYWORDS):
                 reason = "必須キーワード不一致"
         # 案件特化：各グループから最低1語（両刀など）
@@ -477,9 +484,15 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
   → 貴重な両刀人材は、年齢超でも代表が客に交渉できるよう必ず候補として見せる。
   candidates は 高/中 のみ（スキルで低いものは除外）。数稼ぎはしない。
 
-採点は scoring.md の100点ルーブリックに従い、面談通過可能性を 高/中/低 で出す。
-**各候補に breakdown（7軸の内訳）を必ず付ける。** 配点は scoring.md 準拠：
-必須30/鮮度15/単価15/商流15/タイミング10/見せ方10/継続5。**内訳の合計＝score** にする（監査可能性のため）。
+採点は scoring.md の100点ルーブリックに従い、面談通過可能性を 高/中 で出す（低＝除外へ）。
+**各候補に breakdown（7軸の内訳）を必ず付ける。** 配点上限は scoring.md 準拠（超えない）：
+必須30/鮮度15/単価15/商流15/タイミング10/見せ方10/継続5。**内訳の合計＝score** に厳密に一致させる（監査可能性のため）。
+- **両刀（NW×Secの両方の実務）は絶対条件。** 片刀（NWのみ/Secのみ）は必須軸を0にして excluded へ。ここが精度の生命線。
+- reason には**両刀の根拠**を必ず書く：NW側の証拠語（例 Cisco/F5/ルーティング）と Sec側の証拠語（例 FW/UTM/EDR/SIEM/脆弱性）を各1つ以上挙げる。
+- 帯の物差しは scoring.md の「キャリブレーション・アンカー」に合わせる。例：完全両刀＋PL＋単価枠内＋元請直=高(≈90)／
+  両刀だが商流2次・Sec運用寄り=中(≈70)／セキュリティ実務なし=除外（必須0）／希望単価が上限超=除外（単価0）／
+  両刀充足だが年齢上限超=**高/中のまま＋flag（除外しない）**。
+- candidates は 高/中 のみ（score<60 は candidates に入れず excluded）。数稼ぎはしない。
 出力は必ず次のJSONのみ（前後に文章を付けない）:
 {{"candidates":[{{"src":0,"kind":"要員|案件","case":"案件名","engineer":"イニシャル","score":0,"likelihood":"高|中",
 "breakdown":{{"必須":0,"鮮度":0,"単価":0,"商流":0,"タイミング":0,"見せ方":0,"継続":0}},
@@ -617,6 +630,77 @@ def score_with_llm(kept, dropped, base_date):
     if not cands and raw:
         out["raw"] = raw
     return out
+
+
+# 採点の自己整合化（決定論・監査可能性のための後処理）
+AXIS_CAPS = {"必須": 30, "鮮度": 15, "単価": 15, "商流": 15,
+             "タイミング": 10, "見せ方": 10, "継続": 5}
+BAND_HIGH = 80   # scoring.md：高＝80+
+BAND_MID = 60    # scoring.md：中＝60-79／60未満＝低・除外
+
+
+def band_from_score(score):
+    """スコアから面談通過可能性の帯を決定論導出（scoring.md準拠・LLMの自己申告に依存しない）。"""
+    s = score if isinstance(score, (int, float)) else 0
+    if s >= BAND_HIGH:
+        return "高"
+    if s >= BAND_MID:
+        return "中"
+    return "除外"
+
+
+def _is_daihyo_flag(c):
+    """『代表確認』系フラグ（年齢上限超・外国籍等の属性）が付いているか。"""
+    for f in (c.get("flags") or []):
+        if "代表確認" in str(f) or "年齢" in str(f) or "国籍" in str(f):
+            return True
+    return False
+
+
+def reconcile_scores(result):
+    """段階②採点の自己整合化（純粋関数・APIキー不要）。世界最高峰の精度に必須の後処理：
+      1) breakdown(7軸)が揃うなら各軸を配点上限でクランプ→**score＝内訳合計**に確定（監査可能・『内訳≠score』根絶）。
+      2) 帯（高/中/除外）を score から決定論導出（LLMの自己申告likelihoodのブレを排除）。
+      3) score<60 のジャンク候補は candidates から除外（＝『0/100・低』の下書き漏れを根絶・精度＋コスト改善）。
+         属性フラグ（代表確認）付きでも score<60 は skill 不足なので除外へ（貴重な両刀は高得点で残る）。
+    result を破壊的に更新して返す。"""
+    cands = result.get("candidates", []) or []
+    kept_c, moved = [], []
+    for c in cands:
+        if not isinstance(c, dict):
+            continue
+        bd = c.get("breakdown")
+        if isinstance(bd, dict) and all(k in bd for k in AXIS_CAPS):
+            capped = {}
+            for k, cap in AXIS_CAPS.items():
+                try:
+                    v = int(float(bd.get(k) or 0))
+                except (ValueError, TypeError):
+                    v = 0
+                capped[k] = max(0, min(v, cap))
+            c["breakdown"] = capped
+            c["score"] = sum(capped.values())        # score＝内訳合計（監査可能）
+        else:
+            try:
+                c["score"] = max(0, min(int(float(c.get("score") or 0)), 100))
+            except (ValueError, TypeError):
+                c["score"] = 0
+        band = band_from_score(c["score"])
+        c["likelihood"] = band                        # 帯は score から決定論導出（自己申告を上書き）
+        if band == "除外":
+            reason = (c.get("concern") or c.get("reason") or "").strip()
+            label = f"{c.get('engineer', '?')} × {c.get('case', '?')}"
+            flag_note = "（代表確認フラグ有）" if _is_daihyo_flag(c) else ""
+            moved.append({"item": label,
+                          "reason": f"採点{c['score']}<60＝面談通過可能性 低{flag_note}"
+                                    + (f"：{reason}" if reason else "")})
+        else:
+            kept_c.append(c)
+    result["candidates"] = kept_c
+    if moved:
+        result.setdefault("excluded", [])
+        result["excluded"].extend(moved)
+    return result
 
 
 # ---------- 下書き確定（指示出し→送信可能な下書き） ----------
@@ -1483,6 +1567,12 @@ def main():
 
     print(f"[info] LLMプロバイダ: {LLM_PROVIDER}（model: {OPENAI_MODEL if LLM_PROVIDER=='openai' else ANTHROPIC_MODEL}）")
     result = score_with_llm(kept, dropped, base_date)
+    # 採点の自己整合化：score＝内訳合計に確定・帯をscoreから導出・<60のジャンク候補を除外へ（精度の核心）
+    n_before = len(result.get("candidates", []))
+    reconcile_scores(result)
+    n_after = len(result.get("candidates", []))
+    if n_before != n_after:
+        print(f"[reconcile] 候補を自己整合化：{n_before} → {n_after} 件（score<60 を除外へ移動＝ジャンク下書き防止）")
     # マッチした『要員』候補だけ、添付スキルシートをここで初めて読み込み→要約（IMAP時のみ）
     if args.source == "imap":
         try:
