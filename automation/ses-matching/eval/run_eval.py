@@ -96,16 +96,17 @@ def _eval_scoring_inner():
     kept, dropped = R.prefilter(items, BASE_DATE, R.FRESH_DAYS)
     result = R.score_with_llm(kept, dropped, BASE_DATE)
     R.reconcile_scores(result)  # 本番と同じ自己整合化（score＝内訳合計・帯導出・<60除外）後の帯を計測する
-    # src→候補 / src→除外 を引けるよう対応表を作る（kept は元 items の部分集合）
-    kept_bodies = {id(k): i for i, k in enumerate(kept)}  # 未使用だが将来の対応付け用
-    band_by_body = {}
+    # src→候補 の対応表（kept は元 items の部分集合）。帯は 代表確認フラグのみ "flag" 扱い
+    # （新設の「両刀根拠の明示要確認」フラグを "flag" 帯と誤認しないため _is_daihyo_flag を使う）。
+    band_by_body, pickup_by_body = {}, {}
     for c in result.get("candidates", []):
         src = c.get("src")
         if isinstance(src, int) and 0 <= src < len(kept):
-            band = "flag" if c.get("flags") else c.get("likelihood", "低")
+            band = "flag" if R._is_daihyo_flag(c) else c.get("likelihood", "低")
             band_by_body[kept[src]["body"]] = band
+            pickup_by_body[kept[src]["body"]] = R.is_pickup(c)
     dropped_bodies = {d["body"] for d in dropped}
-    ok = 0
+    ok = pok = 0
     for row in rows:
         body = row["body"]
         want = row["expect_band"]
@@ -115,9 +116,17 @@ def _eval_scoring_inner():
             got = band_by_body.get(body, "除外")  # 候補に出なければ実質除外
         hit = (got == want) or (want == "除外" and got == "除外")
         ok += 1 if hit else 0
+        # 本命（85+・両刀根拠）判定の一致も計測（面談依頼が来る母集団の精度）
+        want_p = bool(row.get("expect_pickup", False))
+        got_p = bool(pickup_by_body.get(body, False))
+        phit = want_p == got_p
+        pok += 1 if phit else 0
         mark = "✔" if hit else "✗"
-        print(f"   {mark} [{row['id']}] 期待={want} 実際={got}  {row['note']}")
+        pmark = "✔" if phit else "✗"
+        print(f"   帯{mark} 本命{pmark} [{row['id']}] 帯:期待={want}/実際={got}"
+              f"　本命:期待={want_p}/実際={got_p}  {row['note']}")
     print(f"── 段階② LLM採点 帯一致率： {ok}/{len(rows)} = {ok/len(rows):.2f}（計測・非ゲート）")
+    print(f"── 段階② 本命(85+)一致率： {pok}/{len(rows)} = {pok/len(rows):.2f}（計測・非ゲート）")
     return None  # 計測のみ。合否ゲートにはしない
 
 
@@ -546,6 +555,68 @@ def eval_reconcile():
     return ok == tot
 
 
+def eval_pickup():
+    """本命ピックアップ判定（is_pickup / _text_has_two_sided / reconcile の pickup 付与）を検証。
+    ここが今回の精度強化の核心：**score>=85 かつ 両刀根拠が文面で裏取れる**時だけ本命（自動下書き・トラッカー対象）。
+    決定論・APIキー不要。"""
+    print("── 本命ピックアップ判定（is_pickup・両刀根拠ゲート・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    two_sided = "Cisco/F5でルーティング設計、FW/UTM運用と脆弱性診断の両刀"  # NW語×Sec語あり
+    nw_only = "Cisco/F5・ルーティング・スイッチングの設計構築に長ける"      # NW語のみ
+    # 閾値：85でON・84でOFF（85+が本命の下限）
+    chk("score85＋両刀根拠→本命", R.is_pickup({"score": 85, "reason": two_sided}) is True)
+    chk("score84→本命でない（閾値未満）", R.is_pickup({"score": 84, "reason": two_sided}) is False)
+    chk("score92＋両刀根拠→本命", R.is_pickup({"score": 92, "reason": two_sided}) is True)
+    # 二重ガード：高得点でも根拠が片刀寄りなら本命に載せない
+    chk("score90だが片刀根拠→本命でない", R.is_pickup({"score": 90, "reason": nw_only}) is False)
+    chk("summary側に両刀語があれば拾う", R.is_pickup({"score": 88, "reason": "強い", "summary": two_sided}) is True)
+    chk("85+でも代表確認フラグは本命でない",
+        R.is_pickup({"score": 90, "reason": two_sided, "flags": ["年齢上限超・代表確認"]}) is False)
+    chk("既提案・重複フラグは本命判定に影響しない",
+        R.is_pickup({"score": 90, "reason": two_sided, "flags": ["既提案・重複"]}) is True)
+    chk("非dict/非数値scoreでも落ちない", R.is_pickup("x") is False and R.is_pickup({"score": "88"}) is False)
+    # _text_has_two_sided 単体
+    chk("両刀テキスト→True", R._text_has_two_sided(two_sided) is True)
+    chk("NWのみ→False", R._text_has_two_sided(nw_only) is False)
+    chk("Secのみ→False", R._text_has_two_sided("FW/UTM運用と脆弱性診断の専任") is False)
+
+    # reconcile_scores が pickup を付与し、85+×片刀根拠には保留フラグを立てる
+    res = R.reconcile_scores({"candidates": [
+        {"engineer": "A", "case": "X", "reason": two_sided,   # 92・両刀 → 本命
+         "breakdown": {"必須": 28, "鮮度": 15, "単価": 15, "商流": 15, "タイミング": 10, "見せ方": 7, "継続": 2}},
+        {"engineer": "B", "case": "X", "reason": nw_only,      # 90だが片刀 → 本命でない＋保留フラグ
+         "breakdown": {"必須": 30, "鮮度": 15, "単価": 15, "商流": 15, "タイミング": 10, "見せ方": 5, "継続": 0}},
+        {"engineer": "C", "case": "X", "reason": two_sided,    # 70 → 中・参考（本命でない）
+         "breakdown": {"必須": 22, "鮮度": 13, "単価": 12, "商流": 8, "タイミング": 10, "見せ方": 4, "継続": 1}}],
+        "excluded": []})
+    cA, cB, cC = res["candidates"]
+    chk("A(92両刀)=pickup", cA.get("pickup") is True)
+    chk("B(90片刀)=pickup無し", cB.get("pickup") is False)
+    chk("B に保留フラグ", any("自動下書き保留" in f for f in cB.get("flags", [])))
+    chk("C(70)=pickup無し", cC.get("pickup") is False)
+
+    # render_digest：本命は◎章＋返信下書きあり、参考は○章＋自動下書きなし注記
+    dig = R.render_digest(res, __import__("datetime").date(2026, 7, 12), [1, 2, 3], [])
+    chk("digestに◎本命章", "◎ 本命" in dig)
+    chk("digestに○参考章", "○ 参考" in dig)
+    chk("参考に自動下書きなし注記", "自動下書きは作成していません" in dig)
+
+    # Notion簡潔ブロック：本命/参考を見出しで分ける
+    blocks = R._notion_blocks_from_result(res)
+    allc = " ".join(b[b["type"]]["rich_text"][0]["text"]["content"]
+                    for b in blocks if b["type"] != "divider")
+    chk("Notionに本命/参考の見出し", "◎ 本命" in allc and "○ 参考" in allc)
+    chk("本命は下書き保存済み・参考は自動下書きなし", "下書きフォルダに保存済み" in allc and "自動下書きなし" in allc)
+    print(f"   本命ピックアップ判定 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def eval_watermark():
     """イベント駆動の新着フィルタ（filter_new_by_uid / max_uid）を検証（決定論・IMAP不要）。
     ここが壊れると、ポーリングで①新着を取りこぼす or ②既処理を再採点してコスト暴発、が起きる。"""
@@ -584,7 +655,7 @@ def main():
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
-                             "watermark", "reconcile", "scoring", "all"],
+                             "watermark", "reconcile", "pickup", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -617,6 +688,8 @@ def main():
         results.append(eval_watermark())
     if args.stage in ("reconcile", "all"):
         results.append(eval_reconcile())
+    if args.stage in ("pickup", "all"):
+        results.append(eval_pickup())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）
