@@ -27,6 +27,15 @@ import run_ses_matching as R  # noqa: E402
 
 BASE_DATE = datetime.date(2026, 7, 12)  # fixtures の基準日（決定論のため固定）
 
+# 下書き系テスト（finalize/drafts）が使う案件本文の**固定フィクスチャ**。
+# ※アクティブ案件（案件_*.md）は営業状況で入替・アーカイブされるため、eval はそれに依存せず
+#   このフィクスチャを load_case_mail_block に注入して回す（＝案件が無い/変わっても決定論で緑）。
+TEST_CASE_MAILBLOCK = (
+    "大手遊技機メーカー向けに、ネットワーク／セキュリティ領域をご担当いただける技術者を募集しております。\n"
+    "■案件概要 … 設計・構築・運用フェーズ。\n"
+    "＝＝＝＝＝＝＝＝＝＝＝＝＝＝"
+)
+
 
 def _load(name):
     rows = []
@@ -211,7 +220,13 @@ def eval_finalize():
     print("── 返信下書きのテンプレ差し込み（finalize_draft・決定論・APIキー不要）")
     cand = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "A.N", "company": "ルートゼロ株式会社",
             "person": "伝刀", "to": "要・宛先確認", "src_subject": "Re:【7/12】NW A.N 20年 即日"}
-    d = R.finalize_draft(cand)
+    _orig_block = R.load_case_mail_block
+    R.load_case_mail_block = lambda case_hint="": TEST_CASE_MAILBLOCK  # 案件のアーカイブ状態に依存せず回す
+    try:
+        d = R.finalize_draft(cand)
+        d2 = R.finalize_draft({"case": "遊技機メーカー NW/Sec 支援", "engineer": "K.H"})
+    finally:
+        R.load_case_mail_block = _orig_block
     checks = [
         ("From固定", d.startswith(f"From: {R.SALES_FROM}")),
         ("件名Re:…_ITS村山", "件名: Re:" in d and d.count("_ITS村山") == 1),
@@ -229,8 +244,7 @@ def eval_finalize():
     for label, hit in checks:
         ok += 1 if hit else 0
         print(f"   {'✔' if hit else '✗'} [{label}]")
-    # 未知の会社/担当はプレースホルダに倒れること
-    d2 = R.finalize_draft({"case": "遊技機メーカー NW/Sec 支援", "engineer": "K.H"})
+    # 未知の会社/担当はプレースホルダに倒れること（d2 は上の try 内で生成済み）
     ph = ("〇〇株式会社" in d2 and "ご担当者様" in d2)
     print(f"   {'✔' if ph else '✗'} [未知の会社/担当はプレースホルダ]")
     ok += 1 if ph else 0
@@ -250,6 +264,8 @@ def eval_drafts():
         tot += 1; ok += 1 if cond else 0
         print(f"   {'✔' if cond else '✗'} [{label}]")
 
+    _orig_block = R.load_case_mail_block
+    R.load_case_mail_block = lambda case_hint="": TEST_CASE_MAILBLOCK  # 案件のアーカイブ状態に依存せず回す
     # 宛先ありの候補
     c1 = {"case": "遊技機メーカー NW/Sec 支援", "engineer": "A.N", "company": "ルートゼロ株式会社",
           "person": "伝刀", "to": "dento@routezero.example.co.jp", "src_subject": "NW A.N 20年", "likelihood": "中"}
@@ -278,6 +294,7 @@ def eval_drafts():
           "person": "", "to": "dist@reorga.co.jp", "likelihood": "高"}
     m3, hard3 = R.build_draft_message(c3)
     chk("REOorGA宛は下書き化しない(None)", m3 is None and bool(hard3))
+    R.load_case_mail_block = _orig_block
     print(f"   MIME組み立て 正解率： {ok}/{tot} = {ok/tot:.2f}")
     return ok == tot
 

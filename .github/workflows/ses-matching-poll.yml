@@ -8,10 +8,13 @@ name: SES自動マッチング（ポーリング＝配信即マッチング）
 #    メール→webhook→repository_dispatch の外部経路（Cloudflare Email Worker 等）が必要＝Phase 0では固定費増のため見送り。
 
 on:
-  schedule:
-    # UTC。JST 7:00–20:30 をカバー（22:00–11:30 UTC）で30分毎。夜間(JST21–翌6時)は停止＝Actions分数の節約。
-    - cron: "*/30 22-23,0-11 * * *"
-  workflow_dispatch: {}   # 手動実行
+  # 🛑 一時停止中（2026-07-21〜）：案件スコープ見直しのためポーリング（配信即マッチング）を停止。
+  #   きっかけ：KNさんがオファー獲得＝遊技機NW/Sec案件は充足／スコープ見直しへ。代表から案件を再送後に再開する。
+  #   再開するには下の schedule ブロックのコメントを外す（cron はそのまま）＋ 新案件を automation/ses-matching/ に置く。
+  # schedule:
+  #   # UTC。JST 7:00–20:30 をカバー（22:00–11:30 UTC）で30分毎。夜間(JST21–翌6時)は停止＝Actions分数の節約。
+  #   - cron: "*/30 22-23,0-11 * * *"
+  workflow_dispatch: {}   # 手動実行は残す
 
 # 前の実行が走っている間は新規を待たせる（ウォーターマーク/下書きへの二重処理を防ぐ）。
 concurrency:
