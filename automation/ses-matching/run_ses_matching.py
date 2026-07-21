@@ -492,6 +492,11 @@ SYSTEM_PROMPT = """あなたはITS合同会社の営業マッチング担当AI�
 - 帯の物差しは scoring.md の「キャリブレーション・アンカー」に合わせる。例：完全両刀＋PL＋単価枠内＋元請直=高(≈90)／
   両刀だが商流2次・Sec運用寄り=中(≈70)／セキュリティ実務なし=除外（必須0）／希望単価が上限超=除外（単価0）／
   両刀充足だが年齢上限超=**高/中のまま＋flag（除外しない）**。
+- **本命帯（85+）は厳格に。** 85点以上は「即アプローチで面談が確実に通る母集団」＝自動で提案下書きを作る対象。
+  85+を付けてよいのは次を**全て**満たす時だけ：①両刀の実務がNW側・Sec側とも機器名/年数/フェーズ等の**数字で裏取れる**、
+  ②希望単価が案件上限−粗利の枠内（要確認でない）、③商流が通る（多重NGに抵触しない）、④鮮度内、⑤見せ方に具体（実績数字）。
+  **単価・商流・稼働・両刀根拠のどれか一つでも"要確認/減点"が残るなら 80-84 に留める**（高だが本命ではない＝一点確認してから提案）。
+  迷ったら85未満へ倒す（本命の確度を最優先＝false-highを出さない）。
 - candidates は 高/中 のみ（score<60 は candidates に入れず excluded）。数稼ぎはしない。
 出力は必ず次のJSONのみ（前後に文章を付けない）:
 {{"candidates":[{{"src":0,"kind":"要員|案件","case":"案件名","engineer":"イニシャル","score":0,"likelihood":"高|中",
@@ -637,6 +642,10 @@ AXIS_CAPS = {"必須": 30, "鮮度": 15, "単価": 15, "商流": 15,
              "タイミング": 10, "見せ方": 10, "継続": 5}
 BAND_HIGH = 80   # scoring.md：高＝80+
 BAND_MID = 60    # scoring.md：中＝60-79／60未満＝低・除外
+# 「本命（自動下書き・提案対象＝面談依頼が確実に来る母集団）」の下限スコア。
+# ここに載る候補だけを sales@ 自動下書き・Notion送信トラッカーへ回す（＝確度最優先の絞り込み）。
+# 60-84 の候補は digest/日次ページに「参考」として可視化するが、自動アクションはしない（代表が一点確認してから）。
+PICKUP_MIN = int(_env("PICKUP_MIN", "85"))
 
 
 def band_from_score(score):
@@ -647,6 +656,36 @@ def band_from_score(score):
     if s >= BAND_MID:
         return "中"
     return "除外"
+
+
+def _text_has_two_sided(text):
+    """テキスト（通過根拠/サマリー等）に NW証拠語 と Sec証拠語 の両方が含まれるか（＝両刀の明示根拠）。
+    PREFILTER_GROUPS（案件特化ゲート）が無ければゲートしない＝True。ASCII語は _kw_hit の語境界一致で誤爆を防ぐ。"""
+    if not PREFILTER_GROUPS:
+        return True
+    low = (text or "").lower()
+    for group in PREFILTER_GROUPS:
+        if group and not any(_kw_hit(k, low) for k in group):
+            return False
+    return True
+
+
+def is_pickup(c):
+    """『本命』候補か＝ピックアップ対象（sales@自動下書き・送信トラッカー投入・面談依頼が来る母集団）。
+    次を**全て**満たす時だけ本命とする（＝確度の生命線）：
+      1) score >= PICKUP_MIN（既定85）＝キャリブレーション上『即アプローチで面談が通る』帯。
+      2) 通過根拠/サマリーに NW証拠語 × Sec証拠語 が両方明示（＝両刀の実務が文面で裏取れる）。
+      3) 年齢上限超・国籍等の『代表確認』フラグが無い（＝客都合で弾かれ得る案件は本命に載せず参考で見せる）。
+    高得点でも根拠が片刀寄り（当て馬）／代表確認要なら本命から外し、代表が一点確認してから提案する（自動下書き保留）。"""
+    if not isinstance(c, dict):
+        return False
+    s = c.get("score")
+    if not (isinstance(s, (int, float)) and s >= PICKUP_MIN):
+        return False
+    if _is_daihyo_flag(c):     # 年齢上限超・国籍等の代表確認案件は本命(自動下書き)から外す＝参考で見せる
+        return False
+    text = " ".join(str(c.get(k, "")) for k in ("reason", "summary", "concern"))
+    return _text_has_two_sided(text)
 
 
 def _is_daihyo_flag(c):
@@ -663,6 +702,8 @@ def reconcile_scores(result):
       2) 帯（高/中/除外）を score から決定論導出（LLMの自己申告likelihoodのブレを排除）。
       3) score<60 のジャンク候補は candidates から除外（＝『0/100・低』の下書き漏れを根絶・精度＋コスト改善）。
          属性フラグ（代表確認）付きでも score<60 は skill 不足なので除外へ（貴重な両刀は高得点で残る）。
+      4) **本命（85+・自動下書き対象）を確定**：各候補に pickup(bool) を付す。85+でも通過根拠に
+         両刀の証拠語が揃わなければ pickup=False＋「両刀根拠の明示要確認」flag（＝当て馬の自動下書きを止める）。
     result を破壊的に更新して返す。"""
     cands = result.get("candidates", []) or []
     kept_c, moved = [], []
@@ -695,6 +736,13 @@ def reconcile_scores(result):
                           "reason": f"採点{c['score']}<60＝面談通過可能性 低{flag_note}"
                                     + (f"：{reason}" if reason else "")})
         else:
+            # 本命（自動下書き対象）を決定論確定。85+でも両刀根拠が文面で揃わなければ保留＋フラグ。
+            c["pickup"] = is_pickup(c)
+            if c["score"] >= PICKUP_MIN and not c["pickup"]:
+                flags = c.setdefault("flags", [])
+                hold = "両刀根拠の明示要確認（自動下書き保留）"
+                if hold not in flags:
+                    flags.append(hold)
             kept_c.append(c)
     result["candidates"] = kept_c
     if moved:
@@ -1024,10 +1072,11 @@ def save_drafts_to_sales(result, base_date):
     import imaplib
     import time as _time
 
-    # 高/中の候補。同一runに同じ(案件×要員)が複数来ても in-memory で重複排除（M2）
+    # 本命（85+・pickup）のみ自動下書き＝面談依頼が確実に来る母集団に絞る。
+    # 同一runに同じ(案件×要員)が複数来ても in-memory で重複排除（M2）
     targets, _seen = [], set()
     for c in result.get("candidates", []):
-        if c.get("likelihood") not in ("高", "中"):
+        if not is_pickup(c):
             continue
         k = _its_key(c.get("case"), c.get("engineer"))
         if k in _seen:
@@ -1038,7 +1087,7 @@ def save_drafts_to_sales(result, base_date):
     targets.sort(key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0,
                  reverse=True)
     if not targets:
-        print("[drafts] 対象候補（高/中）なし")
+        print("[drafts] 本命候補（85+・pickup）なし → 自動下書きなし")
         return
     saved = skipped = dup = 0
     folder = _env("SALES_DRAFTS_FOLDER") or "Drafts"   # ログイン失敗時の既定（最後のログ用）
@@ -1171,38 +1220,56 @@ def _fmt_breakdown(c):
     return " / ".join(parts) + f"（計{total}）" + warn
 
 
+def _by_score(cands):
+    return sorted(cands, key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
+
+
 def render_digest(result, base_date, kept, dropped):
     d = base_date.isoformat()
+    all_cands = result.get("candidates", [])
+    pickups = _by_score([c for c in all_cands if is_pickup(c)])
+    refs = _by_score([c for c in all_cands if not is_pickup(c)])
     lines = [f"# SES自動マッチング ダイジェスト（{d}）",
              f"ソース：REOorGA（受信専用 {REOORGA_ADDR}）／基準日：{d}／鮮度：配信{FRESH_DAYS}日以内",
              f"送信元：ITSセールス {SALES_FROM} ※REOorGAアドレスからは送信しない",
-             f"ファネル：入力 →〔①プレフィルタ〕通過{len(kept)}・除外{len(dropped)} →〔②採点〕候補{len(result.get('candidates', []))}",
+             f"ファネル：入力 →〔①プレフィルタ〕通過{len(kept)}・除外{len(dropped)} →"
+             f"〔②採点〕候補{len(all_cands)}（◎本命{len(pickups)}・○参考{len(refs)}）",
+             f"※◎本命（{PICKUP_MIN}点以上・両刀根拠あり）＝自動下書き／トラッカー投入の対象＝面談依頼が確実に来る母集団。"
+             f"○参考（60-{PICKUP_MIN-1}点）＝一点確認してから提案（自動下書きしない）。",
              ""]
-    cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
-    if cands:
-        lines.append("## 提案候補（スコア順）")
-        for i, c in enumerate(cands, 1):
-            flags = ("　⚠️" + " / ".join(c["flags"])) if c.get("flags") else ""
-            lines += [
-                f"### {i}. {c.get('case','?')} × {c.get('engineer','?')}　── {c.get('score','?')}/100・面談通過可能性 {c.get('likelihood','?')}{flags}",
-                f"- 枠：{c.get('tier','-')}／配信元：{c.get('company','?')} {c.get('person','')}（To: {c.get('to','要・宛先確認')}）",
-                f"- 内訳：{_fmt_breakdown(c)}",
-                f"- サマリー：{c.get('summary','')}",
-                f"- 通過根拠：{c.get('reason','')}",
-                f"- 懸念・フォロー：{c.get('concern','')}",
-            ]
-            if c.get("skillsheet_summary"):
-                files = "／".join(c.get("skillsheet_files", [])) or "添付"
-                lines += [f"- 📎 スキルシート（{files}・マッチ後に読込）：",
-                          "  " + c["skillsheet_summary"].replace("\n", "\n  ")]
-            elif c.get("skillsheet_note"):
-                lines.append(f"- 📎 {c['skillsheet_note']}")
-            lines += [
-                "- ▶ 返信下書き（承認後に手動送信）↓",
-                "",
-                c.get("draft", ""),
-                "",
-            ]
+
+    def _emit(c, i, with_draft):
+        flags = ("　⚠️" + " / ".join(c["flags"])) if c.get("flags") else ""
+        out = [
+            f"### {i}. {c.get('case','?')} × {c.get('engineer','?')}　── {c.get('score','?')}/100・面談通過可能性 {c.get('likelihood','?')}{flags}",
+            f"- 枠：{c.get('tier','-')}／配信元：{c.get('company','?')} {c.get('person','')}（To: {c.get('to','要・宛先確認')}）",
+            f"- 内訳：{_fmt_breakdown(c)}",
+            f"- サマリー：{c.get('summary','')}",
+            f"- 通過根拠：{c.get('reason','')}",
+            f"- 懸念・フォロー：{c.get('concern','')}",
+        ]
+        if c.get("skillsheet_summary"):
+            files = "／".join(c.get("skillsheet_files", [])) or "添付"
+            out += [f"- 📎 スキルシート（{files}・マッチ後に読込）：",
+                    "  " + c["skillsheet_summary"].replace("\n", "\n  ")]
+        elif c.get("skillsheet_note"):
+            out.append(f"- 📎 {c['skillsheet_note']}")
+        if with_draft:
+            out += ["- ▶ 返信下書き（承認後に手動送信）↓", "", c.get("draft", ""), ""]
+        else:
+            out += ["- ▶ 参考候補：一点確認（単価/商流/稼働のいずれか）を詰めれば提案可。自動下書きは作成していません。", ""]
+        return out
+
+    if pickups:
+        lines.append(f"## ◎ 本命（{PICKUP_MIN}点以上・提案対象＝面談依頼が確実に来る母集団）")
+        for i, c in enumerate(pickups, 1):
+            lines += _emit(c, i, with_draft=True)
+    else:
+        lines += [f"## ◎ 本命（{PICKUP_MIN}点以上）", "- 本日は本命なし（参考候補は下記）。", ""]
+    if refs:
+        lines.append(f"## ○ 参考（60-{PICKUP_MIN-1}点・一点確認で提案可／自動下書きなし）")
+        for i, c in enumerate(refs, 1):
+            lines += _emit(c, i, with_draft=False)
     if result.get("excluded"):
         lines.append("## 除外・低")
         for e in result["excluded"]:
@@ -1375,7 +1442,8 @@ def _db_row_props(c, base_date):
 
 
 def post_notion_db_rows(result, base_date):
-    """マッチ候補を『SES提案トラッカー』DBに行として追加（ステータス=未送信）。
+    """**本命（85+・pickup）だけ**を『SES提案トラッカー』DBに行として追加（ステータス=未送信）。
+    トラッカー＝代表の送信キュー（未送信→送信済）なので、自動下書きと同じ本命母集団に絞る（参考60-84は載せない）。
     重複キーはスキップ（代表が変えたステータスを上書きしない）。スキル要約＋原本ファイルを行本文に付す。"""
     token = os.environ.get("NOTION_TOKEN")
     parent = _env("NOTION_PAGE_ID") or _env("NOTION_PARENT_ID")
@@ -1385,9 +1453,12 @@ def post_notion_db_rows(result, base_date):
     if not db_id:
         print("[notion-db] DB未取得のため行追加をスキップ（ページ投稿は別途実施）")
         return
-    cands = sorted(result.get("candidates", []),
+    cands = sorted([c for c in result.get("candidates", []) if is_pickup(c)],
                    key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0,
                    reverse=True)
+    if not cands:
+        print("[notion-db] 本命候補（85+）なし → トラッカー行追加なし")
+        return
     added = dup = 0
     seen = set()  # 同一run内の重複排除（検索インデックス遅延で_db_has_keyが両方Falseを返す穴を塞ぐ）
     for c in cands:
@@ -1425,14 +1496,15 @@ def _notion_blocks_from_result(result, token=None):
     token があればスキルシート原本(Excel/PDF)をNotionにアップロードし、file ブロックで開けるようにする。
     返信全文は sales@ の下書きに入る。Notionは『見て判断する』面に絞る。"""
     blocks = []
-    cands = sorted(result.get("candidates", []), key=lambda c: c.get("score", 0) if isinstance(c.get("score"), (int, float)) else 0, reverse=True)
-    if cands:
-        blocks.append(_nt_block("heading_2", "提案候補（スコア順）"))
-    for c in cands:
+    all_cands = result.get("candidates", [])
+    pickups = _by_score([c for c in all_cands if is_pickup(c)])
+    refs = _by_score([c for c in all_cands if not is_pickup(c)])
+
+    def _emit(c, is_p):
         flag = ("　⚠️" + " / ".join(c["flags"])) if c.get("flags") else ""
         blocks.append(_nt_block(
             "heading_3",
-            f"{c.get('engineer','?')} × {c.get('case','?')}　{c.get('score','?')}/100・{c.get('likelihood','?')}{flag}"))
+            f"{'◎' if is_p else '○'} {c.get('engineer','?')} × {c.get('case','?')}　{c.get('score','?')}/100・{c.get('likelihood','?')}{flag}"))
         blocks.append(_nt_block(
             "bulleted_list_item",
             f"年齢 {c.get('age','不明')}｜枠 {c.get('tier','-')}｜配信元 {c.get('company','?')} {c.get('person','')}｜To {c.get('to','要・宛先確認')}"))
@@ -1454,8 +1526,20 @@ def _notion_blocks_from_result(result, token=None):
                     blocks.append({"object": "block", "type": "file",
                                    "file": {"type": "file_upload", "file_upload": {"id": up_id},
                                             "name": (fname or "skillsheet")[:100]}})
-        blocks.append(_nt_block("bulleted_list_item", "返信下書き → sales@ の下書きフォルダに保存済み（開いて送信）"))
+        if is_p:
+            blocks.append(_nt_block("bulleted_list_item", "返信下書き → sales@ の下書きフォルダに保存済み（開いて送信）"))
+        else:
+            blocks.append(_nt_block("bulleted_list_item", "参考：一点確認（単価/商流/稼働）後に提案可。自動下書きなし。"))
         blocks.append({"object": "block", "type": "divider", "divider": {}})
+
+    if pickups:
+        blocks.append(_nt_block("heading_2", f"◎ 本命（{PICKUP_MIN}点以上・提案対象／面談依頼が来る母集団）"))
+        for c in pickups:
+            _emit(c, True)
+    if refs:
+        blocks.append(_nt_block("heading_2", f"○ 参考（60-{PICKUP_MIN-1}点・一点確認で提案可／自動下書きなし）"))
+        for c in refs:
+            _emit(c, False)
     excluded = result.get("excluded", [])
     if excluded:
         blocks.append(_nt_block("heading_2", "除外・低"))

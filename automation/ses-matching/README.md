@@ -127,12 +127,59 @@ digestは成果物(artifact)＋Notionへ。**リポジトリにはコミット�
 | Secret | `SALES_IMAP_HOST` / `SALES_IMAP_PASSWORD` | **sales@ の下書き自動保存**（`SALES_IMAP_USER` は既定 sales@its-tokyo.com） |
 | Variable | `SALES_IMAP_PORT`(993) / `SALES_DRAFTS_FOLDER`(Drafts) | 任意（下書きフォルダ名。例 `INBOX.Drafts`） |
 
-> **下書き自動保存**：マッチした候補（高/中）の返信下書きを、毎朝 sales@ の下書き(Drafts)フォルダに
-> IMAP APPEND で保存する（`\Draft` フラグ・**送信はしない**）。同一(案件×要員)は重複作成しない。
+> **下書き自動保存**：**本命候補（85点以上・両刀根拠あり＝`is_pickup`）だけ**の返信下書きを、毎朝 sales@ の
+> 下書き(Drafts)フォルダに IMAP APPEND で保存する（`\Draft` フラグ・**送信はしない**）。同一(案件×要員)は重複作成しない。
 > `SALES_IMAP_*` が未設定の間はスキップ（登録すると有効化）。代表は下書きを開いて1社ずつ送信するだけ。
+> 60-84点の「参考」候補は日次ダイジェスト／Notionページに見せるが**自動下書きしない**（代表が一点確認してから提案）。
+
+## 本命（85+）ピックアップ＝面談依頼が確実に来る母集団（2026-07-20〜）
+
+「マッチ度が高く、面談依頼が確実に来る」提案だけを自動アクション（sales@下書き・Notion送信トラッカー）に回すため、
+**ピックアップの基準を score 85以上に引き上げた**（`PICKUP_MIN`・既定85。環境変数で調整可）。
+
+| 帯 | スコア | 表示 | 自動下書き / トラッカー | 意味 |
+|---|---|---|---|---|
+| **◎ 本命** | **85+**（かつ両刀根拠あり・代表確認フラグなし） | ダイジェスト最上部・Notion「本命」章 | **する** | 即アプローチで面談が通る品質 |
+| ○ 参考 | 60-84 | ダイジェスト「参考」章・Notion「参考」章 | しない | 一点確認（単価/商流/稼働）で提案可 |
+| 除外 | <60 | 除外・低 | しない | 必須欠け・単価/鮮度NG 等 |
+
+- **二重ガード**：85+でも `reason`／`summary` に **NW証拠語 と Sec証拠語 が両方**現れなければ本命から外し、
+  「両刀根拠の明示要確認（自動下書き保留）」フラグを付す（＝当て馬の自動下書きを止める）。
+- 年齢上限超・国籍等の**代表確認フラグ付きは本命に載せない**（客都合で弾かれ得るため参考で見せる。貴重な両刀は候補として必ず残る）。
+- 判定ロジックは `scoring.md` の「本命（85+）」節。回帰は `eval/run_eval.py --stage pickup`（決定論・20/20）。
 
 > 採点キーは **OpenAI か Anthropic のどちらか一方**でよい（`OPENAI_API_KEY` があればOpenAIを既定採用）。
 > `IMAP_PASSWORD` / APIキーは必ず Secrets。コード・チャット・mdに書かない。
+
+## 総当たりブローカー型マッチング（案件区分フリー・95%）＝ `run_ses_crossmatch.py`
+
+特定案件に縛られず、配信の**案件↔要員を総当たり**で突き合わせ、**マッチ度95%以上**のペアだけを抽出して
+**両サイドの返信下書き**（各¥5万利益）を作る新エンジン。KNさんオファー後の「案件区分フリー」運用向け。
+
+- **鮮度＝過去3営業日**（土日除外・`FRESH_BIZ_DAYS`。祝日は将来拡張）。
+- **パイプライン**：取込 → 分類（案件/要員）＋構造化（スキル/単価/勤務地/商流/稼働） → 総当たりショートリスト
+  （スキル重なり＋予算≥希望） → LLMペア採点（`crossmatch-scoring.md` の6軸・`match=内訳合計`） →
+  **95%以上を熱さ順** → 両面下書き → ダイジェスト＋Notion。
+- **利益モデル（両サイド各¥5万＝`MARGIN_YEN`）**：案件元へ＝要員希望＋5万／要員元へ＝案件予算−5万。
+  **単価が読み取れなければ捏造せず「要確認」**（`parse_rate_man` は本文の数値のみ・捏造禁止）。
+- **両面下書き（代表提供の正式文面）**：
+  - 案件元へ＝`template-案件元向け.txt`（件名 `RE:案件件名`／ご提案単価＝**社内単価＋50,000円**／**該当要員のスキルシートを添付**）。
+  - 要員元へ＝`template-要員向け.txt`（件名 `【案件紹介】〇〇様向け案件のご案内`／単金＝**案件予算−¥5万**）。
+  - From は sales@ 固定、宛先は保守的自動抽出、署名内蔵、REOorGA混入・違反は `validate_draft` で検出。**送信は常に人手**。
+  - IMAP本番では両面下書きを **sales@ の下書き(Drafts)へ自動保存**（`save_pair_drafts_to_sales`・案件元向けはスキルシートをMIME添付・
+    同一ペアは `X-ITS-Key` で重複作成しない）。`SALES_IMAP_*` Secret 登録で有効化。
+- **オフライン完走**（`--offline`）：APIキー無しで分類・採点まで決定論で走る（サンプル検証／キー無し時のフォールバック）。
+
+```bash
+# サンプルで完走（APIキー不要・決定論）
+python automation/ses-matching/run_ses_crossmatch.py --offline --input examples/sample-crossmatch.md --date 2026-07-21
+# 本番（Actions・要 IMAP/OpenAI Secrets）
+python automation/ses-matching/run_ses_crossmatch.py --source imap
+```
+
+- サンプル出力例：`examples/crossmatch-EXAMPLE-20260721.md`（ダミー）。入力は `examples/sample-crossmatch.md`。
+- ルーブリック：`crossmatch-scoring.md`。回帰：`eval/crossmatch_eval.py`（決定論8ステージ・APIキー不要）。
+- ワークフロー：`.github/workflows/ses-crossmatch.yml`（**schedule未有効化**。まず手動/サンプルで品質確認→代表OK後に毎朝自動化）。
 
 ## さらなる拡張
 
