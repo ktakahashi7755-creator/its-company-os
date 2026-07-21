@@ -151,6 +151,32 @@ digestは成果物(artifact)＋Notionへ。**リポジトリにはコミット�
 > 採点キーは **OpenAI か Anthropic のどちらか一方**でよい（`OPENAI_API_KEY` があればOpenAIを既定採用）。
 > `IMAP_PASSWORD` / APIキーは必ず Secrets。コード・チャット・mdに書かない。
 
+## 総当たりブローカー型マッチング（案件区分フリー・95%）＝ `run_ses_crossmatch.py`
+
+特定案件に縛られず、配信の**案件↔要員を総当たり**で突き合わせ、**マッチ度95%以上**のペアだけを抽出して
+**両サイドの返信下書き**（各¥5万利益）を作る新エンジン。KNさんオファー後の「案件区分フリー」運用向け。
+
+- **鮮度＝過去3営業日**（土日除外・`FRESH_BIZ_DAYS`。祝日は将来拡張）。
+- **パイプライン**：取込 → 分類（案件/要員）＋構造化（スキル/単価/勤務地/商流/稼働） → 総当たりショートリスト
+  （スキル重なり＋予算≥希望） → LLMペア採点（`crossmatch-scoring.md` の6軸・`match=内訳合計`） →
+  **95%以上を熱さ順** → 両面下書き → ダイジェスト＋Notion。
+- **利益モデル（両サイド各¥5万＝`MARGIN_YEN`）**：案件元へ＝要員希望＋5万／要員元へ＝案件予算−5万。
+  **単価が読み取れなければ捏造せず「要確認」**（`parse_rate_man` は本文の数値のみ・捏造禁止）。
+- **両面下書き**：案件元＝要員提案＋スキルシート添付／要員元＝案件概要。From は sales@ 固定、宛先は保守的自動抽出、
+  署名付き、REOorGA混入・違反は `validate_draft` で検出。**送信は常に人手**。
+- **オフライン完走**（`--offline`）：APIキー無しで分類・採点まで決定論で走る（サンプル検証／キー無し時のフォールバック）。
+
+```bash
+# サンプルで完走（APIキー不要・決定論）
+python automation/ses-matching/run_ses_crossmatch.py --offline --input examples/sample-crossmatch.md --date 2026-07-21
+# 本番（Actions・要 IMAP/OpenAI Secrets）
+python automation/ses-matching/run_ses_crossmatch.py --source imap
+```
+
+- サンプル出力例：`examples/crossmatch-EXAMPLE-20260721.md`（ダミー）。入力は `examples/sample-crossmatch.md`。
+- ルーブリック：`crossmatch-scoring.md`。回帰：`eval/crossmatch_eval.py`（決定論8ステージ・APIキー不要）。
+- ワークフロー：`.github/workflows/ses-crossmatch.yml`（**schedule未有効化**。まず手動/サンプルで品質確認→代表OK後に毎朝自動化）。
+
 ## さらなる拡張
 
 - スキルシート添付（Excel/PDF）の本文抽出（`pymupdf`/`openpyxl`）を取り込みに追加（`skillsheet-intake.md`）。

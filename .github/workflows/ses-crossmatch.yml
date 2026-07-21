@@ -1,0 +1,66 @@
+name: SES総当たりマッチング（案件↔要員・95%）
+
+# 案件区分フリーの総当たりブローカー型マッチング。過去3営業日の案件・要員を突き合わせ、
+# マッチ度95%以上のペアだけを抽出し、両サイドの返信下書き（各¥5万利益）を生成＋Notion集約する。
+# **メールの自動送信はしない**（下書きのみ・人間が承認して送る）。
+#
+# 🛑 自動実行(schedule)は未有効化。まずサンプル/手動(workflow_dispatch)で品質確認し、
+#    代表OK後に下の schedule ブロックのコメントを外して毎朝自動化を開始する。
+
+on:
+  # schedule:
+  #   # UTC。7:00 JST = 22:00 UTC（前日）。GitHubのschedule遅延を見込んで早めに。
+  #   - cron: "0 22 * * *"
+  workflow_dispatch:
+    inputs:
+      offline:
+        description: "オフライン（決定論・APIキー不要）で走らせる場合は true"
+        required: false
+        default: "false"
+
+jobs:
+  ses-crossmatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r automation/requirements.txt
+      - name: Eval gate (deterministic・APIキー不要・退行検知)
+        run: |
+          python automation/ses-matching/eval/run_eval.py --stage all
+          python automation/ses-matching/eval/crossmatch_eval.py --stage all
+      - name: Run SES crossmatch (案件↔要員 → 95% → 両面下書き → Notion)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ vars.IMAP_PORT }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+          IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}
+          FRESH_BIZ_DAYS: ${{ vars.FRESH_BIZ_DAYS }}      # 任意（既定 3営業日）
+          MATCH_MIN: ${{ vars.MATCH_MIN }}                # 任意（既定 95）
+          MARGIN_YEN: ${{ vars.MARGIN_YEN }}              # 任意（既定 50000＝¥5万・両サイド各）
+          MAX_PAIRS: ${{ vars.MAX_PAIRS }}                # 任意（既定 80・LLM採点に回すペア上限）
+          SALES_FROM: ${{ vars.SALES_FROM }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
+        run: |
+          if [ "${{ github.event.inputs.offline }}" = "true" ]; then
+            python automation/ses-matching/run_ses_crossmatch.py --offline \
+              --input automation/ses-matching/examples/sample-crossmatch.md
+          else
+            python automation/ses-matching/run_ses_crossmatch.py --source imap
+          fi
+      - name: Upload digest artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ses-crossmatch-digest
+          path: automation/ses-matching/digests/
+          if-no-files-found: ignore
