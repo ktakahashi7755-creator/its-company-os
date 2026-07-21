@@ -136,6 +136,11 @@ def drafts(chk):
     chk("案件元: ガードレール違反ゼロ", cs["issues"] == [])
     chk("案件元: 署名(村山/its-tokyo.com)あり", "村山" in cs["body"] and "its-tokyo.com" in cs["body"])
     chk("要員元: 提示単価=予算85-5=80万", "80万円/月" in ts["body"])
+    chk("要員元: 正式文面（件名【案件紹介】…様向け案件のご案内）",
+        ts["subject"].startswith("【案件紹介】") and ts["subject"].endswith("様向け案件のご案内"))
+    chk("要員元: 正式文面の書き出し・案件概要ブロック",
+        "配信にてご共有いただきました" in ts["body"] and "＜案件概要＞" in ts["body"] and "単金：" in ts["body"])
+    chk("要員元: 署名（村山 愛／E-mail）", "村山 愛" in ts["body"] and "sales@its-tokyo.com" in ts["body"])
     chk("要員元: ガードレール違反ゼロ", ts["issues"] == [])
     chk("REOorGA不在(両下書き)", R.REOORGA_ADDR not in cs["body"] and R.REOORGA_ADDR not in ts["body"])
     # 単価不明なら要確認（捏造しない）

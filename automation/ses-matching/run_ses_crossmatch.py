@@ -418,24 +418,33 @@ CASE_SOURCE_TEMPLATE = """{会社名}
 
 {署名}"""
 
-TALENT_SOURCE_TEMPLATE = """{会社名}
-{担当者名}様
+# 要員向け（要員元へ送る）ドラフトは代表提供の正式文面 template-要員向け.txt を使う（署名も文面に内蔵）。
+# ファイルが無い場合のフォールバック（テスト・堅牢性用）。
+_TALENT_SOURCE_FALLBACK = """{担当者名}様
 
-お世話になります。ITS合同会社 営業部の村山です。
-ご紹介いただける要員様に合致する案件がございましたのでご連絡いたしました。
+いつも大変お世話になっております。
+ITS合同会社の村山でございます。
 
-■案件概要
-{案件サマリー}
-・必要スキル：{案件スキル}
-・勤務地：{勤務地}／開始：{開始}／商流：{商流}
-・ご提示単価：{提示単価}（弊社提示）
+配信にてご共有いただきました下記要員様へ、ご紹介可能な案件をご案内いたします。
 
-ご興味をお持ちの要員様がいらっしゃいましたら、
-スキルシートのご送付・ご面談可能日をご教示いただけますでしょうか。
+【{要員名}】
 
-何卒よろしくお願い申し上げます。
+――――――――――
+＜案件概要＞
+{案件概要}
+単金：{提示単価}
+――――――――――
 
-{署名}"""
+ご提案をご検討いただける場合は、最新版の並行状況、面談可能日をご記載のうえ、ご返信いただけますと幸いです。
+
+何卒よろしくお願いいたします。
+
+◇◆━━━━━━━━━━◆◇
+ITS合同会社　営業部
+村山 愛
+E-mail：sales@its-tokyo.com
+HP：https://its-tokyo.com/
+◇◆━━━━━━━━━━◆◇"""
 
 
 def _subject(prefix, title):
@@ -465,21 +474,34 @@ def draft_to_case_source(pair):
     return {"from": SALES_FROM, "to": _contact_to(case), "subject": _subject("Re:", case.get("title")), "body": body}
 
 
+def _case_overview(case):
+    """要員向け下書きに差し込む『案件概要』（要約＋条件）を組む。連絡先メールは要約から除去済み。"""
+    lines = []
+    if case.get("summary"):
+        lines.append(case["summary"])
+    meta = []
+    if case.get("skills"):
+        meta.append("必要スキル：" + "、".join(str(s) for s in case["skills"]))
+    meta.append(f"勤務地：{case.get('location') or '要確認'}")
+    meta.append(f"開始：{case.get('start') or '要確認'}")
+    meta.append(f"商流：{case.get('business_flow') or '要確認'}")
+    lines.append(" ／ ".join(meta))
+    return "\n".join(lines)
+
+
 def draft_to_talent_source(pair):
-    """要員元への下書き（案件概要／提示単価＝案件予算−¥5万）。From/To/件名/本文を返す。"""
+    """要員元への下書き（代表提供の正式文面／単金＝案件予算−¥5万）。件名は【案件紹介】〇〇様向け案件のご案内。"""
     case, talent = pair["case"], pair["talent"]
     q = quote_to_talent(case.get("rate_max"))
-    body = (TALENT_SOURCE_TEMPLATE
-            .replace("{会社名}", talent.get("from_name") or "ご担当会社")
+    tname = R._fmt_reply_subject(talent.get("title") or "ご紹介要員")
+    tmpl = R.read("template-要員向け.txt") or _TALENT_SOURCE_FALLBACK
+    body = (tmpl
             .replace("{担当者名}", "ご担当者")
-            .replace("{案件サマリー}", case.get("summary") or case.get("title") or "（要約要確認）")
-            .replace("{案件スキル}", "、".join(str(s) for s in case.get("skills", [])) or "要確認")
-            .replace("{勤務地}", case.get("location") or "要確認")
-            .replace("{開始}", case.get("start") or "要確認")
-            .replace("{商流}", case.get("business_flow") or "要確認")
-            .replace("{提示単価}", fmt_man(q))
-            .replace("{署名}", R.load_signature())).strip()
-    return {"from": SALES_FROM, "to": _contact_to(talent), "subject": _subject("Re:", talent.get("title")), "body": body}
+            .replace("{要員名}", tname)
+            .replace("{案件概要}", _case_overview(case))
+            .replace("{提示単価}", fmt_man(q) + ("（弊社提示）" if isinstance(q, int) else ""))).strip()
+    return {"from": SALES_FROM, "to": _contact_to(talent),
+            "subject": f"【案件紹介】{tname}様向け案件のご案内", "body": body}
 
 
 def _draft_text(d):
@@ -659,7 +681,8 @@ def _clean_title(subject, body):
 
 
 def _clean_summary(body):
-    """要約用に本文を整形：見出し(#)・配信日・担当行を除去し、メールアドレスを伏せて1行化（相手先連絡先を相手側下書きに漏らさない）。"""
+    """要約用に本文を整形：見出し(#)・配信日・担当行を除去し、メールアドレスを伏せて1行化（相手先連絡先を相手側下書きに漏らさない）。
+    連絡先の定型（担当…／ご興味あれば…ご連絡）は要約から落とす（相手側下書きに相手の連絡導線を出さない）。"""
     keep = []
     for line in (body or "").splitlines():
         s = line.strip()
@@ -667,7 +690,9 @@ def _clean_summary(body):
             continue
         keep.append(s)
     text = R.EMAIL_RE.sub("", " ".join(keep))          # メールアドレスは要約から除去
-    return re.sub(r"\s{2,}", " ", text).strip()[:140]
+    # 連絡先の定型文以降を落とす（「担当…」「ご興味あれば…ご連絡ください」等の連絡導線）
+    text = re.split(r"(?:担当\s*[:：]|ご興味|ご連絡ください|ご連絡下さい|お気軽に)", text)[0]
+    return re.sub(r"\s{2,}", " ", text).strip(" 　。、").strip()[:160]
 
 
 def offline_classify(items):
