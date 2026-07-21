@@ -132,9 +132,14 @@ def drafts(chk):
     d = X.build_pair_drafts({"case": case, "talent": talent})
     cs, ts = d["case_source"], d["talent_source"]
     chk("案件元: From=sales@", cs["from"] == R.SALES_FROM)
-    chk("案件元: 提示単価=希望75+5=80万", "80万円/月" in cs["body"])
+    chk("案件元: 提示単価=希望75+5=80万（社内単価＋50,000円）",
+        "80万円/月" in cs["body"] and "社内単価＋50,000円" in cs["body"])
+    chk("案件元: 正式文面（件名RE:・書き出し・要員サマリー）",
+        cs["subject"].startswith("RE:") and "ご紹介可能な要員をご提案いたします" in cs["body"]
+        and "＜要員サマリー＞" in cs["body"])
+    chk("案件元: 署名(村山 愛/E-mail)あり", "村山 愛" in cs["body"] and "sales@its-tokyo.com" in cs["body"])
     chk("案件元: ガードレール違反ゼロ", cs["issues"] == [])
-    chk("案件元: 署名(村山/its-tokyo.com)あり", "村山" in cs["body"] and "its-tokyo.com" in cs["body"])
+    chk("案件元: スキルシート添付情報を持つ", "attachments" in cs)
     chk("要員元: 提示単価=予算85-5=80万", "80万円/月" in ts["body"])
     chk("要員元: 正式文面（件名【案件紹介】…様向け案件のご案内）",
         ts["subject"].startswith("【案件紹介】") and ts["subject"].endswith("様向け案件のご案内"))
@@ -152,6 +157,17 @@ def drafts(chk):
     chk("reorga宛は要確認に倒れ本文にも出ない",
         bad["case_source"]["to"] == "要・宛先確認"
         and "reorga" not in X._draft_text(bad["case_source"]).lower())
+    # MIME組み立て：案件元向けにスキルシートを添付（sales@ 下書き保存用）
+    cs_att = {**cs, "_ss_files": [("技術経歴書_KT.xlsx", b"PK\x03\x04dummy")], "_key": "abc123"}
+    m, hard = X.build_pair_mime(cs_att)
+    chk("MIME: 組み立て成功", m is not None and not hard)
+    if m is not None:
+        chk("MIME: From=sales@／X-ITS-Key付与", m["From"] == R.SALES_FROM and m["X-ITS-Key"] == "abc123")
+        chk("MIME: スキルシートを添付", [a.get_filename() for a in m.iter_attachments()] == ["技術経歴書_KT.xlsx"])
+    # フェイルクローズ：From違反(reorga)ならMIMEを作らない（None＋違反理由）
+    m2, hard2 = X.build_pair_mime({"from": "contact@reorga.co.jp", "to": "x@y.co.jp",
+                                   "subject": "x", "body": "村山 its-tokyo.com"})
+    chk("MIME: From違反は作らない(None)", m2 is None and bool(hard2))
 
 
 def offline_e2e(chk):

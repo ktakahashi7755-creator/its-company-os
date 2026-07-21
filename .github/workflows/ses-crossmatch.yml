@@ -50,6 +50,11 @@ jobs:
           SALES_FROM: ${{ vars.SALES_FROM }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
+          SALES_IMAP_HOST: ${{ secrets.SALES_IMAP_HOST }}       # sales@ の下書き保存（両面下書き・案件元はスキルシート添付）
+          SALES_IMAP_USER: ${{ secrets.SALES_IMAP_USER }}       # 既定 sales@its-tokyo.com
+          SALES_IMAP_PASSWORD: ${{ secrets.SALES_IMAP_PASSWORD }} # ★Secret（sales@のパスワード）
+          SALES_IMAP_PORT: ${{ vars.SALES_IMAP_PORT }}          # 任意（既定 993）
+          SALES_DRAFTS_FOLDER: ${{ vars.SALES_DRAFTS_FOLDER }}  # 任意（既定 Drafts／例 INBOX.Drafts）
         run: |
           if [ "${{ github.event.inputs.offline }}" = "true" ]; then
             python automation/ses-matching/run_ses_crossmatch.py --offline \

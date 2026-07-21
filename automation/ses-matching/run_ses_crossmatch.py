@@ -399,24 +399,34 @@ def _valid_date(s):
 # ============================================================
 # 8) 両サイドの返信下書き（決定論テンプレ・送信はしない）
 # ============================================================
-CASE_SOURCE_TEMPLATE = """{会社名}
-{担当者名}様
+# 案件元向け（案件元へ送る＝要員提案）ドラフトは代表提供の正式文面 template-案件元向け.txt を使う（署名内蔵）。
+# ※該当要員のスキルシートを添付する（sales@ 下書き保存時に MIME 添付）。
+# ファイルが無い場合のフォールバック（テスト・堅牢性用）。
+_CASE_SOURCE_FALLBACK = """{担当者名}様
 
-お世話になります。ITS合同会社 営業部の村山です。
-{案件名}の件で、ご要件にマッチする要員をご紹介させていただきたくご連絡いたしました。
+いつも大変お世話になっております。
+ITS合同会社の村山でございます。
 
-■ご紹介要員
+配信にてご共有いただきました下記案件につきまして、ご紹介可能な要員をご提案いたします。
+
+【{案件名}】
+
+――――――――――
+＜要員サマリー＞
 {要員サマリー}
-・保有スキル：{要員スキル}
-・稼働：{稼働}／商流：{商流}
-・ご提示単価：{提示単価}（弊社提示）
+ご提案単価：{提案単価}
+――――――――――
 
-スキルシートを添付いたします。ご興味をお持ちいただけましたら、
-オンライン面談の可否・可能日をご教示いただけますでしょうか。
+ご検討いただき、ぜひ面談の機会をいただけますと幸いです。
 
-ご協力のほど何卒よろしくお願い申し上げます。
+何卒よろしくお願いいたします。
 
-{署名}"""
+◇◆━━━━━━━━━━◆◇
+ITS合同会社　営業部
+村山 愛
+E-mail：sales@its-tokyo.com
+HP：https://its-tokyo.com/
+◇◆━━━━━━━━━━◆◇"""
 
 # 要員向け（要員元へ送る）ドラフトは代表提供の正式文面 template-要員向け.txt を使う（署名も文面に内蔵）。
 # ファイルが無い場合のフォールバック（テスト・堅牢性用）。
@@ -457,21 +467,38 @@ def _contact_to(it):
     return info["to"]
 
 
+def _talent_summary(talent):
+    """案件元向け下書きに差し込む『要員サマリー』（要約＋スキル・稼働・商流・レベル）。連絡先は除去済み。"""
+    lines = []
+    if talent.get("summary"):
+        lines.append(talent["summary"])
+    meta = []
+    if talent.get("skills"):
+        meta.append("スキル：" + "、".join(str(s) for s in talent["skills"]))
+    meta.append(f"稼働：{talent.get('start') or '要確認'}")
+    meta.append(f"商流：{talent.get('business_flow') or '要確認'}")
+    if talent.get("seniority") and talent.get("seniority") != "不明":
+        meta.append(f"レベル：{talent['seniority']}")
+    lines.append(" ／ ".join(meta))
+    return "\n".join(lines)
+
+
 def draft_to_case_source(pair):
-    """案件元への下書き（要員提案＋スキルシート添付／提示単価＝要員希望＋¥5万）。From/To/件名/本文を返す。"""
+    """案件元への下書き（代表提供の正式文面／提案単価＝社内単価(要員希望)＋¥5万）。
+    件名は RE:案件件名。該当要員のスキルシートを添付（sales@ 下書き保存時にMIME添付）。"""
     case, talent = pair["case"], pair["talent"]
     q = quote_to_case(talent.get("rate_max"))
-    body = (CASE_SOURCE_TEMPLATE
-            .replace("{会社名}", case.get("from_name") or "ご担当会社")
+    cname = R._fmt_reply_subject(case.get("title") or "貴社案件")
+    tmpl = R.read("template-案件元向け.txt") or _CASE_SOURCE_FALLBACK
+    price = (fmt_man(q) + "（社内単価＋50,000円）") if isinstance(q, int) else fmt_man(q)
+    body = (tmpl
             .replace("{担当者名}", "ご担当者")
-            .replace("{案件名}", R._fmt_reply_subject(case.get("title") or "貴社案件"))
-            .replace("{要員サマリー}", talent.get("summary") or talent.get("title") or "（要約要確認）")
-            .replace("{要員スキル}", "、".join(str(s) for s in talent.get("skills", [])) or "要確認")
-            .replace("{稼働}", talent.get("start") or "要確認")
-            .replace("{商流}", talent.get("business_flow") or "要確認")
-            .replace("{提示単価}", fmt_man(q))
-            .replace("{署名}", R.load_signature())).strip()
-    return {"from": SALES_FROM, "to": _contact_to(case), "subject": _subject("Re:", case.get("title")), "body": body}
+            .replace("{案件名}", cname)
+            .replace("{要員サマリー}", _talent_summary(talent))
+            .replace("{提案単価}", price)).strip()
+    return {"from": SALES_FROM, "to": _contact_to(case), "subject": f"RE:{cname}", "body": body,
+            "attachments": talent.get("skillsheet_files", []),  # 表示用のファイル名（実体は _ss_files）
+            "_ss_files": talent.get("_ss_files", [])}
 
 
 def _case_overview(case):
@@ -515,6 +542,110 @@ def build_pair_drafts(pair):
     cs["issues"] = R.validate_draft(_draft_text(cs))
     ts["issues"] = R.validate_draft(_draft_text(ts))
     return {"case_source": cs, "talent_source": ts}
+
+
+def build_pair_mime(draft):
+    """下書きdict(from/to/subject/body[/_ss_files/_key])をMIMEに。スキルシート(_ss_files)があれば添付。
+    ガードレール違反なら (None, issues)。宛先未確定は To 空＋本文冒頭に注記。送信はしない（\\Draft保存用）。"""
+    import email.message
+    issues = R.validate_draft(_draft_text(draft))
+    if issues:
+        return None, issues
+    msg = email.message.EmailMessage()
+    msg["From"] = draft["from"]
+    to_ok = ("@" in str(draft.get("to"))) and R._is_sendable_addr(draft.get("to"))
+    prefix = "" if to_ok else "※宛先未確定：送信前に配信元担当のアドレスを To に入れてください。\n\n"
+    if to_ok:
+        msg["To"] = draft["to"]
+    msg["Subject"] = draft["subject"]
+    if draft.get("_key"):
+        msg["X-ITS-Key"] = draft["_key"]              # 実行跨ぎの重複下書き防止（下書きフォルダ検索キー）
+    msg.set_content(prefix + draft["body"])
+    for fname, payload in (draft.get("_ss_files") or []):   # 案件元向けに該当要員のスキルシートを添付
+        if payload:
+            msg.add_attachment(payload, maintype="application", subtype="octet-stream",
+                               filename=(fname or "skillsheet"))
+    return msg, []
+
+
+def save_pair_drafts_to_sales(picked):
+    """マッチした各ペアの両面下書きを sales@ の下書き(Drafts)へ IMAP APPEND で保存（**送信しない**）。
+    案件元向けには該当要員のスキルシートを添付。同一(案件×要員×サイド)は X-ITS-Key で重複作成しない。
+    SALES_IMAP_HOST/PASSWORD 未設定なら何もしない（Secret登録で有効化）。"""
+    host = R._env("SALES_IMAP_HOST")
+    pw = R._env("SALES_IMAP_PASSWORD")
+    user = R._env("SALES_IMAP_USER", SALES_FROM)
+    if not (host and pw):
+        print("[drafts] SALES_IMAP_HOST/PASSWORD 未設定のため下書き保存はスキップ（Secret登録で有効化）")
+        return
+    import imaplib
+    import time as _t
+    # ペアごとに 案件元(スキルシート添付)＋要員元 の2下書き。X-ITS-Keyで重複判定。
+    targets = []
+    for p in picked:
+        d = p.get("drafts") or {}
+        ctitle, ttitle = p["case"].get("title", ""), p["talent"].get("title", "")
+        cs = {**d.get("case_source", {}), "_key": R._its_key(ctitle + "|案件元", ttitle)}
+        ts = {**d.get("talent_source", {}), "_key": R._its_key(ctitle + "|要員元", ttitle)}
+        targets += [cs, ts]
+    if not targets:
+        print("[drafts] 対象ペアなし")
+        return
+    port = int(R._env("SALES_IMAP_PORT", "993"))
+    tmo = int(R._env("SALES_IMAP_TIMEOUT", "30"))
+    tries = int(R._env("SALES_IMAP_RETRIES", "3"))
+    M = None
+    for attempt in range(1, tries + 1):
+        try:
+            M = imaplib.IMAP4_SSL(host, port, timeout=tmo)
+            M.login(user, pw)
+            break
+        except Exception as e:  # noqa
+            try:
+                if M is not None:
+                    M.logout()
+            except Exception:  # noqa
+                pass
+            M = None
+            if attempt < tries:
+                _t.sleep(5 * attempt)
+            else:
+                print(f"[drafts] 接続失敗（{tries}回）: {e}")
+                return
+    saved = dup = skipped = 0
+    try:
+        folder = R._env("SALES_DRAFTS_FOLDER") or R._detect_drafts_folder(M)
+        folder_q = f'"{folder}"' if (" " in folder or "(" in folder) else folder
+        selected = False
+        try:
+            selected = M.select(folder_q)[0] == "OK"
+        except Exception:  # noqa
+            selected = False
+        for d in targets:
+            if selected and d.get("_key"):
+                try:
+                    typ, data = M.search(None, "HEADER", "X-ITS-Key", d["_key"])
+                    if typ == "OK" and data and data[0].split():
+                        dup += 1
+                        continue
+                except Exception:  # noqa
+                    pass
+            msg, hard = build_pair_mime(d)
+            if msg is None:
+                skipped += 1
+                print(f"[drafts] スキップ（ガードレール違反）: {d.get('subject','')[:30]} {hard}")
+                continue
+            typ, _ = M.append(folder_q, "(\\Draft)", imaplib.Time2Internaldate(_t.time()), msg.as_bytes())
+            saved += 1 if typ == "OK" else 0
+            skipped += 0 if typ == "OK" else 1
+        print(f"[drafts] sales@ 下書き：新規{saved}／重複回避{dup}／スキップ{skipped}（folder={folder}）")
+    except Exception as e:  # noqa
+        print(f"[drafts] エラー: {e}")
+    finally:
+        try:
+            M.logout()
+        except Exception:  # noqa
+            pass
 
 
 # ============================================================
@@ -567,6 +698,7 @@ def render_digest(picked, base_date, n_items, n_cases, n_talents):
             "",
             f"#### ▶ 案件元への下書き（要員提案＋スキルシート添付／提示 {fmt_man(quote_to_case(t.get('rate_max')))}）",
             _draft_flag(drafts['case_source']),
+            _attach_note(drafts['case_source']),
             _draft_text(drafts['case_source']),
             "",
             f"#### ▶ 要員元への下書き（案件概要／提示 {fmt_man(quote_to_talent(c.get('rate_max')))}）",
@@ -575,6 +707,14 @@ def render_digest(picked, base_date, n_items, n_cases, n_talents):
             "",
         ]
     return "\n".join(lines)
+
+
+def _attach_note(draft):
+    """案件元向け下書きのスキルシート添付表示。実データ実行時は該当要員の技術経歴書が自動添付される。"""
+    files = draft.get("attachments") or []
+    if files:
+        return "📎 添付：" + "／".join(files) + "（該当要員のスキルシート）"
+    return "📎 添付：該当要員のスキルシート（実データ実行時に sales@ 下書きへ自動添付）"
 
 
 def _draft_flag(d):
@@ -804,6 +944,11 @@ def main():
         post_notion(picked, base_date)
     except Exception as e:  # noqa
         print(f"[notion] スキップ（エラー）: {e}")
+    if args.source == "imap":     # 両面下書きを sales@ Drafts へ（案件元向けはスキルシート添付）。送信はしない
+        try:
+            save_pair_drafts_to_sales(picked)
+        except Exception as e:  # noqa
+            print(f"[drafts] スキップ（エラー）: {e}")
 
 
 def _enrich_pair_skillsheets(picked):
