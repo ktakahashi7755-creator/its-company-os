@@ -43,7 +43,7 @@
 ```mermaid
 flowchart TD
     A["受信箱 contact@reorga.co.jp<br/>(imap.lolipop.jp・読むだけ)"] -->|IMAP取得・本文先頭のみ| B[fetch_imap]
-    B --> C["① プレフィルタ<br/>鮮度5日 + 両刀NW×Sec 語一致<br/>prefilter()"]
+    B --> C["① プレフィルタ<br/>鮮度5日 + 両刀サーバ×NW 語一致<br/>prefilter()"]
     C -->|通過分のみ| D["② AI採点 (LLM)<br/>面談通過可能性・7軸内訳<br/>score_with_llm()"]
     D -->|高/中のみ| E["スキルシート精読<br/>UID再取得→PDF/Excel要約<br/>enrich_skillsheets()"]
     D --> F["日次ダイジェスト + candidates.json<br/>render_digest / write_candidates_json"]
@@ -70,7 +70,7 @@ flowchart TD
 | 設定 | `_env` | 環境変数の取得（既定値つき）。全設定の入口。 |
 | 受信 | `fetch_imap` / `fetch_full_by_uids` | REOorGAをIMAP取得（軽量→高/中のみUID再取得で精読）。timeout付き。 |
 | 本文 | `_decode` / `_body_text` | 文字コード・本文抽出（不正charsetもフォールバック）。 |
-| ① | `prefilter` / `_kw_hit` / `_kw_pattern` | 鮮度5日＋両刀NW×Secの語境界一致（`soc`∈associate等の誤爆を防止）。 |
+| ① | `prefilter` / `_kw_hit` / `_kw_pattern` | 鮮度5日＋両刀サーバ×NWの語境界一致（`lan`∈plan・`ad`∈broadband等の誤爆を防止）。案件スコープに応じ `PREFILTER_GROUPS` を差し替える。 |
 | ② | `score_with_llm` / `_score_chunk` / `_call_llm` | LLM採点（バッチ・7軸内訳・型正規化・例外隔離）。 |
 | スキル | `extract_skillsheets` / `summarize_skillsheet` / `enrich_skillsheets` | 高/中の要員のみ添付を読み要約。 |
 | 下書き | `reply_parts` / `finalize_draft` / `build_draft_message` | テンプレ＋案件MAIL-BLOCK＋署名で決定論生成。件名 `Re:○○_ITS村山`。 |

@@ -9,3 +9,5 @@
 {"id":"S09","expect_band":"中","expect_pickup":false,"note":"両刀＋情シス成立だがPL/リーダー無し＝メンバー止まり・単価内","date":"2026-07-11","body":"T.K 5年。Windows Server/ADとCisco/F5のNW両刀。情シス常駐。PL/リーダー経験なし・メンバー志向。希望65万。即日可。商流直。"}
 {"id":"S10","expect_band":"除外","expect_pickup":false,"note":"純サーバ（NW実務なし）＝両刀不成立（★新スコープの対称足切り）","date":"2026-07-11","body":"A.S 6年。Windows Server/AD/Hyper-V・仮想基盤の運用専任。ネットワーク実務なし。希望70万。即日可。"}
 {"id":"S11","expect_band":"高","expect_pickup":true,"note":"完全両刀・情シス・2〜5名PL・元請直・単価枠内・鮮度0日＝確認事項ゼロの本命","date":"2026-07-12","body":"N.M 9年。事業会社情シス。Windows Server/AD/VMware/LinuxとCisco/Aruba/F5多拠点NW・ルーティング設計〜運用の両刀。2〜5名PLで進捗・品質管理・ベンダーコントロール。希望88万。8月〜即日。自社（元請直）。"}
+{"id":"S12","expect_band":"高","expect_pickup":true,"note":"歓迎要件フル（EDR初動/クラウドIaaS/Shell自動化）が本命を後押し・両刀＋情シス＋PL・枠内・直請","date":"2026-07-12","body":"S.M 事業会社情シス9年。Windows Server/AD/VMwareとCisco/F5多拠点NWの両刀を設計〜運用。2〜5名PLで進捗・品質管理。EDRアラート初動、クラウドIaaS運用、Shellで運用自動化まで対応。希望85万。8月〜。自社（元請直）。"}
+{"id":"S13","expect_band":"除外","expect_pickup":false,"note":"情シス目線はあるがサーバ×NWの構築・運用実務が浅くPL無し＝ヘルプデスク寄りで不適合","date":"2026-07-11","body":"U.K 4年。社内ヘルプデスクと端末キッティング中心。Windows端末サポート、社内LAN保守は軽微。サーバ/ネットワークの構築・運用の実務は浅い。PL/リーダー経験なし。希望55万。即日可。"}
