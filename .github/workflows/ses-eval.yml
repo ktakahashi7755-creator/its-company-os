@@ -1,0 +1,36 @@
+name: SESマッチング精度ゲート（eval）
+
+# PR/デフォルトブランチ更新のたびに、SESマッチングの精度evalを回して**退行を検知**する。
+# 決定論ステージ（--stage all）はAPIキー不要で必ず走り、失敗すればPRを止める（＝精度の回帰ガード）。
+# 段階②（LLM採点の帯一致）はキーがあれば計測するが**非ゲート**（LLMの揺れでPRを止めない）。
+# メール送信・Notion反映・実マッチングは一切しない（evalのみ）。
+
+on:
+  pull_request:
+  push:
+    branches: ["claude/focused-bell-kt8d7o"]
+  workflow_dispatch: {}
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r automation/requirements.txt
+      - name: Eval gate (決定論・APIキー不要・退行検知＝失敗でPRを止める)
+        run: |
+          python automation/ses-matching/eval/run_eval.py --stage all
+          python automation/ses-matching/eval/crossmatch_eval.py --stage all
+      - name: 段階② LLM採点の帯一致（キーがあれば計測・非ゲート）
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+        run: |
+          python automation/ses-matching/eval/run_eval.py --stage scoring
