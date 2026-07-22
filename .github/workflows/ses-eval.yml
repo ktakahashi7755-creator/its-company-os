@@ -24,16 +24,12 @@ jobs:
         run: |
           python automation/ses-matching/eval/run_eval.py --stage all
           python automation/ses-matching/eval/crossmatch_eval.py --stage all
-      - name: 段階② LLM採点の帯一致（手動実行時のみ・キーがあれば計測・非ゲート）
-        # コスト最優先（Phase 0）：LLM課金を毎pushで発生させない。精度計測したい時だけ
-        # Actions の「Run workflow」（workflow_dispatch）で回す。決定論ゲートは常に自動で走る。
-        if: github.event_name == 'workflow_dispatch'
+      - name: 段階② LLM採点の帯一致（★一時：gpt-4oで1回計測・代表承認済み・次コミットで手動限定へ戻す）
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          OPENAI_MODEL: gpt-4o
+          LLM_PROVIDER: openai
         run: |
+          echo "=== 段階② を gpt-4o で計測（gpt-4o-mini との比較用・一回限り） ==="
           python automation/ses-matching/eval/run_eval.py --stage scoring
