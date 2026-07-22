@@ -35,10 +35,14 @@ python eval/run_eval.py --stage all
   - クライアントの正式版（遊技機 情シスインフラPL）に合わせ、**両刀ゲートを「NW×セキュリティ」から「サーバ×NW」へ転換**。
     `PREFILTER_GROUPS` をサーバ群（Windows Server/AD/VMware/Hyper-V/Linux/仮想 等）×NW群（Cisco/多拠点/VPN/SD-WAN 等）に差し替え。
     **セキュリティ(EDR初動)は必須→歓迎(加点)へ移動。** 情シス目線・2〜5名PL/進捗品質管理は `scoring.md` の必須内訳で重み付け。
-  - **fixtures を新スコープへ全面作り直し**：`fixtures_prefilter.jsonl`（27件＝サーバ×NW両刀の pass/純サーバ・純NWの fail/語境界の
-    FP誤爆トラップ 'plan'∈lan・'broadband'∈ad 等）、`fixtures_scoring.jsonl`（11件＝本命/中/除外/年齢flag、単価アンカー支払92万以下）。
-    `run_eval.py` の本命判定テスト（`two_sided`/`nw_only`）もサーバ×NWへ更新。
-  - **測定**：段階①プレフィルタ **27件で precision 1.00・recall 1.00・F1 1.00**（純サーバ/純NWの片刀を確実に足切り、語境界の誤爆ゼロ）。
+  - **fixtures を新スコープへ全面作り直し**：`fixtures_prefilter.jsonl`（29件＝サーバ×NW両刀の pass/純サーバ・純NWの fail/語境界の
+    FP誤爆トラップ 'plan'∈lan・'broadband'∈ad 等/製品名・ディストリ recall）、`fixtures_scoring.jsonl`（13件＝本命/中/除外/年齢flag、
+    歓迎加点が本命を後押し・情シスヘルプデスク寄り除外、単価アンカー支払92万以下）。`run_eval.py` の本命判定テストもサーバ×NWへ更新。
+  - **recall強化**：サーバ群に製品名/ディストリ/役割語（RHEL/CentOS/Ubuntu/WSUS/IIS/GPO/ドメインコントローラ 等）を追加。
+    DNS/DHCP は NW側とも割れる曖昧語のため不採用（サーバ信号を薄めない＝precision維持）。
+  - **段階②precision強化**：否定・希薄化表現（「サーバ実務なし」「軽微／浅い」）を両刀充足と見なさない指示を SYSTEM_PROMPT／`scoring.md`
+    に明記（プレフィルタの recall 設計の弱点を採点で補正）。ヘルプデスク中心・構築運用実務が薄い要員は片刀相当で厳しく採点。
+  - **測定**：段階①プレフィルタ **29件で precision 1.00・recall 1.00・F1 1.00**（純サーバ/純NWの片刀を確実に足切り、語境界の誤爆ゼロ）。
     本命ピックアップ **20/20**。→ **決定論15ステージ全緑（`--stage all`・exit 0）**。段階②(LLM帯一致)はCI（キー有）で実測。
 
 - **2026-07-20 R7｜本命(85+)ピックアップ＝面談依頼が確実に来る母集団に絞る**：

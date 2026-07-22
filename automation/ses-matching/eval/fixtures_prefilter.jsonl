@@ -25,3 +25,5 @@
 {"id":"N09","expect_pass":false,"note":"FPガード：純NW（VPN/SD-WAN・多拠点のみ・サーバ語なし）は落とす","date":"2026-07-11","body":"VPN/SD-WANとルーター・多拠点スイッチング設計。監視のみ。〜80万。"}
 {"id":"N10","expect_pass":false,"note":"FPガード：純サーバ（Windows Server/AD/Hyper-V専任・NW語なし）は落とす","date":"2026-07-11","body":"Windows Server/AD/Hyper-V専任。仮想基盤運用のみ。〜75万。"}
 {"id":"N11","expect_pass":false,"note":"FPガード：純サーバ英文の'plan'で'lan'を誤検出しない・NW語一切なし","date":"2026-07-11","body":"Windows Server and Hyper-V operations only. The plan is virtualization and endpoint patching."}
+{"id":"P10","expect_pass":true,"note":"recall：製品名/ディストリ（RHEL/WSUS）× Cisco多拠点 の両刀","date":"2026-07-11","body":"RHEL/CentOSサーバとWSUS/IIS運用、Cisco多拠点NW・ルーティング設計運用の両刀。情シス常駐。希望85万。"}
+{"id":"N12","expect_pass":false,"note":"FPガード：ディストリ専任（RHEL/CentOS）でもNW語なしなら落とす","date":"2026-07-11","body":"RHEL/CentOS/Ubuntuサーバ構築・運用専任。WSUS/IIS/GPO管理。運用監視のみ。〜75万。"}
