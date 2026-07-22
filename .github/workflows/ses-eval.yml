@@ -37,7 +37,7 @@ jobs:
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ github.event.inputs.scoring_model || vars.OPENAI_MODEL }}
+          OPENAI_MODEL: ${{ github.event.inputs.scoring_model || vars.OPENAI_MODEL || 'gpt-4o' }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}

@@ -34,7 +34,7 @@ jobs:
       - name: Run SES crossmatch (案件↔要員 → 95% → 両面下書き → Notion)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o' }}   # 既定 gpt-4o（SES全体で統一・代表決定2026-07-22）。vars.OPENAI_MODEL で上書き可
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}

@@ -25,7 +25,7 @@ jobs:
       - name: Run SES matching (IMAP -> score -> digest/Notion)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}         # あればOpenAIを自動採用（安価）
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}                # 任意（既定 gpt-4o-mini）
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o' }}   # 既定 gpt-4o（代表決定2026-07-22：本命1.00・年齢flag原則回復）。vars.OPENAI_MODEL で上書き可
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}                # 任意（openai / anthropic 明示指定）
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # OpenAIを使わない場合のみ
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}          # 任意（既定 claude-sonnet-4-6）
