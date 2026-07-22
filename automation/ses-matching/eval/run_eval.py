@@ -584,8 +584,8 @@ def eval_pickup():
         tot += 1; ok += 1 if cond else 0
         print(f"   {'✔' if cond else '✗'} [{label}]")
 
-    two_sided = "Cisco/F5でルーティング設計、FW/UTM運用と脆弱性診断の両刀"  # NW語×Sec語あり
-    nw_only = "Cisco/F5・ルーティング・スイッチングの設計構築に長ける"      # NW語のみ
+    two_sided = "Windows Server/ADとCisco/F5多拠点NWをサーバ×NW両面で設計運用、情シスでPL"  # サーバ語×NW語あり
+    nw_only = "Cisco/F5・ルーティング・スイッチング・多拠点NWの設計構築に長ける"      # NW語のみ（サーバ語なし）
     # 閾値：85でON・84でOFF（85+が本命の下限）
     chk("score85＋両刀根拠→本命", R.is_pickup({"score": 85, "reason": two_sided}) is True)
     chk("score84→本命でない（閾値未満）", R.is_pickup({"score": 84, "reason": two_sided}) is False)
@@ -601,7 +601,7 @@ def eval_pickup():
     # _text_has_two_sided 単体
     chk("両刀テキスト→True", R._text_has_two_sided(two_sided) is True)
     chk("NWのみ→False", R._text_has_two_sided(nw_only) is False)
-    chk("Secのみ→False", R._text_has_two_sided("FW/UTM運用と脆弱性診断の専任") is False)
+    chk("サーバのみ→False", R._text_has_two_sided("Windows Server/AD/VMware専任で仮想基盤を構築") is False)
 
     # reconcile_scores が pickup を付与し、85+×片刀根拠には保留フラグを立てる
     res = R.reconcile_scores({"candidates": [

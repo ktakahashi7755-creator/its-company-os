@@ -31,6 +31,16 @@ python eval/run_eval.py --stage all
 
 ## 改善履歴（測定値つき）
 
+- **2026-07-22 R8｜案件スコープ改定（NW×Sec → サーバ×NW両刀＋情シス/PL）に精度を追随**：
+  - クライアントの正式版（遊技機 情シスインフラPL）に合わせ、**両刀ゲートを「NW×セキュリティ」から「サーバ×NW」へ転換**。
+    `PREFILTER_GROUPS` をサーバ群（Windows Server/AD/VMware/Hyper-V/Linux/仮想 等）×NW群（Cisco/多拠点/VPN/SD-WAN 等）に差し替え。
+    **セキュリティ(EDR初動)は必須→歓迎(加点)へ移動。** 情シス目線・2〜5名PL/進捗品質管理は `scoring.md` の必須内訳で重み付け。
+  - **fixtures を新スコープへ全面作り直し**：`fixtures_prefilter.jsonl`（27件＝サーバ×NW両刀の pass/純サーバ・純NWの fail/語境界の
+    FP誤爆トラップ 'plan'∈lan・'broadband'∈ad 等）、`fixtures_scoring.jsonl`（11件＝本命/中/除外/年齢flag、単価アンカー支払92万以下）。
+    `run_eval.py` の本命判定テスト（`two_sided`/`nw_only`）もサーバ×NWへ更新。
+  - **測定**：段階①プレフィルタ **27件で precision 1.00・recall 1.00・F1 1.00**（純サーバ/純NWの片刀を確実に足切り、語境界の誤爆ゼロ）。
+    本命ピックアップ **20/20**。→ **決定論15ステージ全緑（`--stage all`・exit 0）**。段階②(LLM帯一致)はCI（キー有）で実測。
+
 - **2026-07-20 R7｜本命(85+)ピックアップ＝面談依頼が確実に来る母集団に絞る**：
   - **ピックアップ基準を score 85以上に引き上げ**（`PICKUP_MIN`・既定85）。sales@自動下書き・Notion送信トラッカー投入を
     **本命（85+）だけ**に限定し、60-84は「参考」として可視化のみ（自動アクションなし）。→ 面談依頼が来る確度を最優先。

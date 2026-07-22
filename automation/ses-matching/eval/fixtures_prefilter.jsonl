@@ -1,27 +1,27 @@
-{"id":"P01","expect_pass":true,"note":"両刀案件・鮮度内","date":"2026-07-11","body":"【元請直】NW/セキュリティ支援。Cisco/F5設計、FW/UTM運用、脆弱性診断。恵比寿常駐。〜80万。"}
-{"id":"P02","expect_pass":true,"note":"両刀要員・鮮度内","date":"2026-07-12","body":"K.S 7年。Cisco・F5設計〜運用、脆弱性診断・FW/UTM運用。PLで体制課題洗い出し。希望90万。"}
-{"id":"P03","expect_pass":true,"note":"英語の両刀","date":"2026-07-10","body":"Network engineer with security experience: Cisco routing and firewall/IDS operations, vulnerability assessment."}
-{"id":"P04","expect_pass":true,"note":"YAMAHA/F5 + UTM/SOC 両刀","date":"2026-07-09","body":"YAMAHA/F5のNW、UTM/SOCのセキュリティ両刀。インフラ横断PL。希望95万。"}
-{"id":"P05","expect_pass":true,"note":"SOC標準語が単独で成立（過剰修正の回帰ガード）","date":"2026-07-11","body":"SOC構築とネットワーク設計。Cisco中心、脆弱性対応。常駐。"}
-{"id":"P06","expect_pass":true,"note":"IDS/IPS標準語が単独で成立（過剰修正の回帰ガード）","date":"2026-07-11","body":"L2/L3スイッチングとIDS/IPS運用。ネットワークとセキュリティ両面。"}
-{"id":"N01","expect_pass":false,"note":"純NW・Sec無し","date":"2026-07-11","body":"ネットワーク設計・構築。Cisco/Aruba中心。監視のみ。常駐。〜80万。"}
-{"id":"N02","expect_pass":false,"note":"純Web開発（領域不一致）","date":"2026-07-10","body":"自社SaaSのWebアプリ開発。React/Node.js/AWS。フロント〜API。〜75万。"}
-{"id":"N03","expect_pass":false,"note":"両刀だが鮮度8日超過","date":"2026-07-04","body":"NW/セキュリティ支援。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。〜80万。"}
-{"id":"N04","expect_pass":false,"note":"純Sec・NW語なし","date":"2026-07-11","body":"ファイアウォール/UTM運用とSOC監視の専任。脆弱性診断が主業務。"}
-{"id":"N05","expect_pass":false,"note":"誤爆トラップ：純NWだが英単語associateに'soc'（sec語なし）","date":"2026-07-11","body":"Network operations. YAMAHA/F5 switching. The associate handles daily tasks. Monitoring only."}
-{"id":"N06","expect_pass":false,"note":"誤爆トラップ：純NWだが英単語tipsに'ips'（sec語なし）","date":"2026-07-11","body":"Network construction with Cisco. Some routing tips for engineers. Operations only."}
-{"id":"N07","expect_pass":false,"note":"誤爆トラップ：純NWだがhybridsに'ids'（sec語なし）","date":"2026-07-11","body":"Network design with Cisco and Aruba, including hybrids of L2/L3 segments. Monitoring only."}
-{"id":"N08","expect_pass":false,"note":"純データセンター運用・両刀でない＋鮮度超過","date":"2026-07-03","body":"データセンター運用監視オペレータ。夜勤あり。〜45万。即日。"}
-{"id":"B01","expect_pass":true,"note":"鮮度ちょうど5日＝境界（通過するべき）","date":"2026-07-07","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
-{"id":"B02","expect_pass":false,"note":"鮮度6日＝境界の外（除外するべき）","date":"2026-07-06","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
-{"id":"B03","expect_pass":true,"note":"件名だけに両刀語（本文は薄い）","date":"2026-07-11","subject":"【募集】ネットワーク兼セキュリティ Cisco/FW/脆弱性","body":"詳細は添付のとおり。ご確認ください。"}
-{"id":"B04","expect_pass":true,"note":"大文字混在（CISCO/FIREWALL）でも成立","date":"2026-07-10","body":"NETWORK design with CISCO and FIREWALL/IDS operations. VULNERABILITY assessment included."}
-{"id":"B05","expect_pass":true,"note":"未来日付＝配信予告は許容（age<0で通過）","date":"2026-07-20","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
-{"id":"B06","expect_pass":true,"note":"不正な日付文字列は鮮度判定をスキップし語のみで判定（例外を出さない）","date":"2026-13-40","body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
-{"id":"B07","expect_pass":true,"note":"日付null（Date欠落）でもクラッシュせず語で判定","date":null,"body":"NW/セキュリティ両刀。Cisco/F5、FW/UTM運用、脆弱性診断。常駐。"}
-{"id":"P07","expect_pass":true,"note":"recall：新同義語での両刀（VPN/SD-WAN × EDR/SIEM）。旧語彙では取りこぼす","date":"2026-07-12","body":"VPN/SD-WAN設計・構築とEDR/SIEM運用。インフラ横断。希望78万。8月〜。"}
-{"id":"P08","expect_pass":true,"note":"recall：新同義語での両刀（ルーター/無線LAN × ゼロトラスト/サイバー）","date":"2026-07-11","body":"ルーター・無線LAN構築とゼロトラスト/サイバー対策の設計運用。PL経験。希望85万。"}
-{"id":"P09","expect_pass":true,"note":"recall：BGP/OSPF × WAF/インシデント の両刀","date":"2026-07-10","body":"BGP/OSPFルーティング設計とWAF導入・インシデント対応。常駐可。希望80万。"}
-{"id":"N09","expect_pass":false,"note":"FPガード：純NW（VPN/SD-WANのみ・Sec語なし）は落とす","date":"2026-07-11","body":"VPN/SD-WANとルーター・スイッチング設計構築。監視のみ。〜80万。"}
-{"id":"N10","expect_pass":false,"note":"FPガード：純Sec（EDR/SIEM専任・NW語なし）は落とす","date":"2026-07-11","body":"EDR/SIEM運用とインシデント対応の専任。脆弱性診断が主。〜75万。"}
-{"id":"N11","expect_pass":false,"note":"FPガード：純Sec本文中の'plan'で'lan'を誤検出しない（語境界）。NW語は一切含めない","body":"EDR and SIEM operations only. The plan is incident response and endpoint hardening.","date":"2026-07-11"}
+{"id":"P01","expect_pass":true,"note":"両刀(サーバ×NW)案件・鮮度内","date":"2026-07-11","body":"【元請直】情シスインフラPL。Windows Server/AD構築、Cisco/F5・多拠点NW運用。恵比寿常駐。〜100万。"}
+{"id":"P02","expect_pass":true,"note":"両刀(サーバ×NW)要員・鮮度内","date":"2026-07-12","body":"K.S 情シス7年。Windows Server・AD・VMwareとCisco/F5多拠点NWを設計〜運用。2〜5名PLで進捗管理。希望88万。8月〜。"}
+{"id":"P03","expect_pass":true,"note":"英語の両刀（Windows Server × Cisco network）","date":"2026-07-10","body":"Infra engineer: Windows Server / Active Directory administration and Cisco network routing, multi-site LAN/WAN operations."}
+{"id":"P04","expect_pass":true,"note":"YAMAHA/F5 多拠点NW + Hyper-V/VMware サーバ の両刀","date":"2026-07-09","body":"YAMAHA/F5の多拠点NWとHyper-V/VMwareのサーバ両面。インフラPL。希望95万。"}
+{"id":"P05","expect_pass":true,"note":"Linuxサーバ + ネットワーク標準語が成立","date":"2026-07-11","body":"Linuxサーバ運用とネットワーク設計。Cisco中心。情シス常駐。"}
+{"id":"P06","expect_pass":true,"note":"vSphere仮想基盤 + L2/L3スイッチング の両刀","date":"2026-07-11","body":"vSphere仮想基盤の構築運用とL2/L3スイッチング。サーバとネットワーク両面を横断。"}
+{"id":"P07","expect_pass":true,"note":"recall：新同義語での両刀（オンプレ仮想化 × VPN/SD-WAN 多拠点）","date":"2026-07-12","body":"オンプレのWindows Server仮想化基盤とVPN/SD-WANの多拠点NW。情シス横断。希望78万。8月〜。"}
+{"id":"P08","expect_pass":true,"note":"recall：Active Directory × ルーター/無線LAN の両刀","date":"2026-07-11","body":"Active Directory設計・運用とルーター・無線LAN構築。2〜5名PL経験。希望85万。"}
+{"id":"P09","expect_pass":true,"note":"recall：ESXi × BGP/OSPF の両刀","date":"2026-07-10","body":"ESXi仮想基盤の運用とBGP/OSPFルーティング設計。情シス常駐可。希望80万。"}
+{"id":"N01","expect_pass":false,"note":"純NW・サーバ無し","date":"2026-07-11","body":"ネットワーク設計・構築。Cisco/Aruba中心。多拠点監視のみ。常駐。〜80万。"}
+{"id":"N02","expect_pass":false,"note":"純Web開発（領域不一致・両群なし）","date":"2026-07-10","body":"自社SaaSのWebアプリ開発。React/Node.js/AWS。フロント〜API。〜75万。"}
+{"id":"N03","expect_pass":false,"note":"両刀だが鮮度8日超過","date":"2026-07-04","body":"情シスインフラ支援。Windows Server/ADとCisco/F5多拠点NW。常駐。〜100万。"}
+{"id":"N04","expect_pass":false,"note":"純サーバ・NW語なし（★新スコープの片刀足切り）","date":"2026-07-11","body":"Windows Server/AD/VMware専任のサーバ構築・運用。仮想基盤のみ。〜80万。"}
+{"id":"N05","expect_pass":false,"note":"誤爆トラップ：純NW英文の'broadband'で'ad'をサーバ誤検出しない（語境界）","date":"2026-07-11","body":"Network operations with Cisco. Broadband routing setup for branches. Monitoring only."}
+{"id":"N06","expect_pass":false,"note":"誤爆トラップ：純NW英文の'road-map'で'ad'を誤検出しない（語境界）","date":"2026-07-11","body":"Cisco network design, road-map for switches and routers. Operations only."}
+{"id":"N07","expect_pass":false,"note":"誤爆トラップ：純サーバ英文の'plan'で'lan'をNW誤検出しない（語境界）","date":"2026-07-11","body":"Windows Server and VMware operations. The plan is patching and AD design. No routing."}
+{"id":"N08","expect_pass":false,"note":"純データセンター監視・両刀でない＋鮮度超過","date":"2026-07-03","body":"データセンター監視オペレータ。夜勤あり。〜45万。即日。"}
+{"id":"B01","expect_pass":true,"note":"鮮度ちょうど5日＝境界（通過するべき）","date":"2026-07-07","body":"サーバ×NW両刀。Windows Server/AD、Cisco/F5多拠点。情シス常駐。"}
+{"id":"B02","expect_pass":false,"note":"鮮度6日＝境界の外（除外するべき）","date":"2026-07-06","body":"サーバ×NW両刀。Windows Server/AD、Cisco/F5多拠点。情シス常駐。"}
+{"id":"B03","expect_pass":true,"note":"件名だけに両刀語（本文は薄い）","date":"2026-07-11","subject":"【募集】Windows Server兼ネットワーク Cisco/AD 情シスPL","body":"詳細は添付のとおり。ご確認ください。"}
+{"id":"B04","expect_pass":true,"note":"大文字混在（WINDOWS SERVER/CISCO/VMWARE）でも成立","date":"2026-07-10","body":"WINDOWS SERVER administration with CISCO network operations. VMWARE virtualization included."}
+{"id":"B05","expect_pass":true,"note":"未来日付＝配信予告は許容（age<0で通過）","date":"2026-07-20","body":"サーバ×NW両刀。Windows Server/AD、Cisco/F5多拠点。情シス常駐。"}
+{"id":"B06","expect_pass":true,"note":"不正な日付文字列は鮮度判定をスキップし語のみで判定（例外を出さない）","date":"2026-13-40","body":"サーバ×NW両刀。Windows Server/AD、Cisco/F5多拠点。情シス常駐。"}
+{"id":"B07","expect_pass":true,"note":"日付null（Date欠落）でもクラッシュせず語で判定","date":null,"body":"サーバ×NW両刀。Windows Server/AD、Cisco/F5多拠点。情シス常駐。"}
+{"id":"N09","expect_pass":false,"note":"FPガード：純NW（VPN/SD-WAN・多拠点のみ・サーバ語なし）は落とす","date":"2026-07-11","body":"VPN/SD-WANとルーター・多拠点スイッチング設計。監視のみ。〜80万。"}
+{"id":"N10","expect_pass":false,"note":"FPガード：純サーバ（Windows Server/AD/Hyper-V専任・NW語なし）は落とす","date":"2026-07-11","body":"Windows Server/AD/Hyper-V専任。仮想基盤運用のみ。〜75万。"}
+{"id":"N11","expect_pass":false,"note":"FPガード：純サーバ英文の'plan'で'lan'を誤検出しない・NW語一切なし","date":"2026-07-11","body":"Windows Server and Hyper-V operations only. The plan is virtualization and endpoint patching."}

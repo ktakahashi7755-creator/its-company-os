@@ -1,11 +1,11 @@
-{"id":"S01","expect_band":"高","expect_pickup":true,"note":"完全両刀・PL・単価枠内・元請直・鮮度内＝本命","date":"2026-07-11","body":"K.S 7年。Cisco・F5設計〜運用、脆弱性診断・FW/UTM運用。PLで進捗・体制課題洗い出し。Win/Linux・VMware。希望70万。8月〜。自社（直請可）。"}
-{"id":"S02","expect_band":"中","expect_pickup":false,"note":"両刀だがSec運用寄り・商流2次で要確認","date":"2026-07-09","body":"T.A 6年。Cisco・Aruba中心のNW設計構築。セキュリティは運用寄り（FW監視）。希望68万。即日可。商流2次（要確認）。"}
-{"id":"S03","expect_band":"除外","expect_pickup":false,"note":"セキュリティ実務なし＝両刀足切り","date":"2026-07-11","body":"M.R 5年。Cisco NW構築・運用専任。セキュリティ実務なし。希望60万。即日可。"}
-{"id":"S04","expect_band":"除外","expect_pickup":false,"note":"単価110万＞②上限97万＝粗利割れで単価超過","date":"2026-07-11","body":"Y.N 10年。NW（Cisco/F5）＋セキュリティ（設計/脆弱性）両刀・PL。希望110万。翌月可。"}
-{"id":"S05","expect_band":"除外","expect_pickup":false,"note":"鮮度8日超過で他決リスク","date":"2026-07-03","body":"両刀・PL・設計構築運用。Cisco/F5、FW/UTM、脆弱性診断。希望85万。即日可。"}
-{"id":"S06","expect_band":"高","expect_pickup":false,"note":"高だが本命ではない：商流2次で一点確認が残る（＝80-84）","date":"2026-07-08","body":"H.T 8年。YAMAHA/F5のNW、UTM/SOCのセキュリティ両刀。インフラ横断PL経験。希望72万。8月〜。商流2次（要確認）。"}
-{"id":"S07","expect_band":"flag","expect_pickup":false,"note":"両刀充足だが年齢上限超＝除外せずフラグ・本命でない（代表確認要）","date":"2026-07-11","body":"H.I 63歳。インフラ/PM強い。Cisco NW＋FW/脆弱性のセキュリティ両刀。希望80万。即日可。"}
-{"id":"S08","expect_band":"高","expect_pickup":true,"note":"新同義語での完全両刀＋PL＋単価枠内＋直請＋鮮度内＝本命","date":"2026-07-12","body":"R.K 8年。VPN/SD-WAN・Cisco設計構築、EDR/SIEM・脆弱性のセキュリティ両刀。PLで体制改善。希望70万。8月〜。自社（直請可）。"}
-{"id":"S09","expect_band":"中","expect_pickup":false,"note":"両刀成立だがPL無し＝①枠止まり・単価内","date":"2026-07-11","body":"T.K 5年。Cisco/F5のNW設計構築とFW/UTM運用の両刀。PL経験なし・メンバー志向。希望65万。即日可。商流直。"}
-{"id":"S10","expect_band":"除外","expect_pickup":false,"note":"純Sec（NW実務なし）＝両刀不成立","date":"2026-07-11","body":"A.S 6年。EDR/SIEM運用・脆弱性診断の専任。ネットワーク実務なし。希望70万。即日可。"}
-{"id":"S11","expect_band":"高","expect_pickup":true,"note":"完全両刀・PL・元請直・単価枠内・鮮度0日＝確認事項ゼロの本命","date":"2026-07-12","body":"N.M 9年。Cisco/Aruba/F5でルーティング・LB設計構築、FW/UTM・IDS/IPS・脆弱性診断の運用まで両刀。PLで進捗管理。希望68万。8月〜即日。自社（元請直）。Win/Linux・VMware横断。"}
+{"id":"S01","expect_band":"高","expect_pickup":true,"note":"サーバ×NW両刀・情シス・2〜5名PL・単価枠内(92以下)・元請直・鮮度内＝本命","date":"2026-07-11","body":"K.S 事業会社情シス7年。Windows Server・AD・VMwareとCisco/F5多拠点NWを設計〜運用。2〜5名PLで進捗・品質管理。希望88万。8月〜。自社（直請可）。"}
+{"id":"S02","expect_band":"中","expect_pickup":false,"note":"両刀成立だが情シス目線/PLが薄い・商流2次で要確認","date":"2026-07-09","body":"T.A 6年。Cisco・Aruba中心のNW設計構築、サーバはWindows運用補助程度。情シス/PL経験は薄い。希望80万。即日可。商流2次（要確認）。"}
+{"id":"S03","expect_band":"除外","expect_pickup":false,"note":"サーバ実務なし＝両刀足切り（★新スコープ）","date":"2026-07-11","body":"M.R 5年。Cisco NW構築・運用専任。サーバ・仮想基盤の実務なし。希望60万。即日可。"}
+{"id":"S04","expect_band":"除外","expect_pickup":false,"note":"希望105万＞支払上限92万＝粗利割れで単価超過","date":"2026-07-11","body":"Y.N 10年。Windows Server＋Cisco/F5多拠点NWの両刀・情シス・PL。希望105万。翌月可。"}
+{"id":"S05","expect_band":"除外","expect_pickup":false,"note":"鮮度8日超過で他決リスク","date":"2026-07-03","body":"両刀・情シス・PL。Windows Server/AD、Cisco/F5多拠点NW、設計構築運用。希望85万。即日可。"}
+{"id":"S06","expect_band":"高","expect_pickup":false,"note":"高だが本命ではない：商流2次で一点確認が残る（＝80-84）","date":"2026-07-08","body":"H.T 8年。Windows Server/AD・VMwareとYAMAHA/F5多拠点NWの両刀。情シス支援・インフラPL。希望85万。8月〜。商流2次（要確認）。"}
+{"id":"S07","expect_band":"flag","expect_pickup":false,"note":"両刀充足だが年齢40歳程度超＝除外せずフラグ・本命でない（代表確認要）","date":"2026-07-11","body":"H.I 58歳。インフラ/PM強い。Windows Server＋Cisco多拠点NWの両刀。情シス常駐経験。希望85万。即日可。"}
+{"id":"S08","expect_band":"高","expect_pickup":true,"note":"新同義語での完全両刀＋情シス＋PL＋単価枠内＋直請＋鮮度内＝本命","date":"2026-07-12","body":"R.K 8年。オンプレWindows Server仮想化とVPN/SD-WAN・Cisco多拠点NWを設計構築。情シスでPL・体制改善。希望70万。8月〜。自社（直請可）。"}
+{"id":"S09","expect_band":"中","expect_pickup":false,"note":"両刀＋情シス成立だがPL/リーダー無し＝メンバー止まり・単価内","date":"2026-07-11","body":"T.K 5年。Windows Server/ADとCisco/F5のNW両刀。情シス常駐。PL/リーダー経験なし・メンバー志向。希望65万。即日可。商流直。"}
+{"id":"S10","expect_band":"除外","expect_pickup":false,"note":"純サーバ（NW実務なし）＝両刀不成立（★新スコープの対称足切り）","date":"2026-07-11","body":"A.S 6年。Windows Server/AD/Hyper-V・仮想基盤の運用専任。ネットワーク実務なし。希望70万。即日可。"}
+{"id":"S11","expect_band":"高","expect_pickup":true,"note":"完全両刀・情シス・2〜5名PL・元請直・単価枠内・鮮度0日＝確認事項ゼロの本命","date":"2026-07-12","body":"N.M 9年。事業会社情シス。Windows Server/AD/VMware/LinuxとCisco/Aruba/F5多拠点NW・ルーティング設計〜運用の両刀。2〜5名PLで進捗・品質管理・ベンダーコントロール。希望88万。8月〜即日。自社（元請直）。"}
