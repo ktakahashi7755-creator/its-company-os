@@ -9,7 +9,12 @@ on:
   pull_request:
   push:
     branches: ["claude/focused-bell-kt8d7o"]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      scoring_model:
+        description: "段階②の採点モデル（例 gpt-4o／空欄は既定 gpt-4o-mini）。手動計測時のみ有効。"
+        required: false
+        default: ""
 
 jobs:
   eval:
@@ -24,12 +29,17 @@ jobs:
         run: |
           python automation/ses-matching/eval/run_eval.py --stage all
           python automation/ses-matching/eval/crossmatch_eval.py --stage all
-      - name: 段階② LLM採点の帯一致（★一時：gpt-4oで1回計測・代表承認済み・次コミットで手動限定へ戻す）
+      - name: 段階② LLM採点の帯一致（手動実行時のみ・キーがあれば計測・非ゲート）
+        # コスト最優先（Phase 0）：LLM課金を毎pushで発生させない。精度計測したい時だけ
+        # Actions の「Run workflow」（workflow_dispatch）で回す。決定論ゲートは常に自動で走る。
+        # scoring_model 入力でモデルを上書き可（例 gpt-4o）。空欄なら vars.OPENAI_MODEL→既定 gpt-4o-mini。
+        if: github.event_name == 'workflow_dispatch'
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: gpt-4o
-          LLM_PROVIDER: openai
+          OPENAI_MODEL: ${{ github.event.inputs.scoring_model || vars.OPENAI_MODEL }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
         run: |
-          echo "=== 段階② を gpt-4o で計測（gpt-4o-mini との比較用・一回限り） ==="
           python automation/ses-matching/eval/run_eval.py --stage scoring
