@@ -24,7 +24,10 @@ jobs:
         run: |
           python automation/ses-matching/eval/run_eval.py --stage all
           python automation/ses-matching/eval/crossmatch_eval.py --stage all
-      - name: 段階② LLM採点の帯一致（キーがあれば計測・非ゲート）
+      - name: 段階② LLM採点の帯一致（手動実行時のみ・キーがあれば計測・非ゲート）
+        # コスト最優先（Phase 0）：LLM課金を毎pushで発生させない。精度計測したい時だけ
+        # Actions の「Run workflow」（workflow_dispatch）で回す。決定論ゲートは常に自動で走る。
+        if: github.event_name == 'workflow_dispatch'
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
