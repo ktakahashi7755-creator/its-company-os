@@ -10,10 +10,6 @@ on:
     #   その遅延を見込んでも「8:30までに手元（Notion / sales@ Drafts）に揃う」ためのバッファ。
     - cron: "0 22 * * *"
   workflow_dispatch: {}   # 手動実行は残す（配線確認用）
-  # ★一時トリガー（代表指示2026-07-22「前と同じように走らせて」）：dispatch APIが権限で使えないため
-  #   pushで1回実行させる。同一リポジトリPRのためSecrets(IMAP/OpenAI/Notion)が渡る。実行後に本ブロックは削除する。
-  pull_request:
-    branches: ["claude/focused-bell-kt8d7o"]
 
 jobs:
   ses-matching:
