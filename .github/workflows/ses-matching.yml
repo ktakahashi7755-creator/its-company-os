@@ -38,6 +38,7 @@ jobs:
           MAX_FETCH: ${{ vars.MAX_FETCH }}                      # 任意（既定 2500・最新何件まで取得）
           MSG_BYTES: ${{ vars.MSG_BYTES }}                      # 任意（既定 40000・1通の取得バイト数）
           STAGE2_MAX: ${{ vars.STAGE2_MAX }}                    # 任意（既定 60・AI採点に回す上限）
+          PICKUP_MIN: ${{ vars.PICKUP_MIN || '90' }}           # 本命(自動下書き/Notion)しきい値。代表指示2026-07-22で90点以上に絞る（既定85→90）。vars.PICKUP_MIN で上書き可
           SALES_FROM: ${{ vars.SALES_FROM }}                   # 任意（既定 sales@its-tokyo.com）
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}             # Notion連携トークン
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}         # ★親ページID（配下に日次候補ページを自動作成）

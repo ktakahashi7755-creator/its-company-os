@@ -58,6 +58,7 @@ jobs:
           MAX_FETCH: ${{ vars.MAX_FETCH }}
           MSG_BYTES: ${{ vars.MSG_BYTES }}
           STAGE2_MAX: ${{ vars.STAGE2_MAX }}
+          PICKUP_MIN: ${{ vars.PICKUP_MIN || '90' }}           # 本命しきい値90点以上（代表指示2026-07-22）。vars.PICKUP_MIN で上書き可
           SALES_FROM: ${{ vars.SALES_FROM }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
