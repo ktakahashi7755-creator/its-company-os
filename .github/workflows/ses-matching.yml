@@ -10,9 +10,6 @@ on:
     #   その遅延を見込んでも「8:30までに手元（Notion / sales@ Drafts）に揃う」ためのバッファ。
     - cron: "0 22 * * *"
   workflow_dispatch: {}   # 手動実行は残す（配線確認用）
-  # ★一時トリガー（再実行2回目・ハング対策版：timeout25分＋MAX_FETCH500）。実行後に削除する。
-  pull_request:
-    branches: ["claude/focused-bell-kt8d7o"]
 
 jobs:
   ses-matching:
