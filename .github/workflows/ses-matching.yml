@@ -1,15 +1,15 @@
 name: SES自動マッチング
 
 on:
-  # 🛑 一時停止中（2026-07-21〜）：案件スコープ見直しのため自動マッチング・自動下書きを停止。
-  #   きっかけ：KNさんがオファー獲得＝遊技機NW/Sec案件は充足／スコープ見直しへ。代表から案件を再送後に再開する。
-  #   再開するには下の schedule ブロックのコメントを外す（cron はそのまま）＋ archive/ の案件を戻すか新案件を追加する。
-  # schedule:
-  #   # GitHub ActionsのcronはUTC。7:00 JST = 22:00 UTC（前日）。
-  #   # ★狙いを7:00 JSTに前倒し。GitHubのschedule起動は数十分〜1時間超遅延することがあり、
-  #   #   その遅延を見込んでも「8:30までに手元（Notion / sales@ Drafts）に揃う」ためのバッファ。
-  #   - cron: "0 22 * * *"
-  workflow_dispatch: {}   # 手動実行は残す（配線確認用。案件が無い間はマッチ0＝下書きも作られない）
+  # ▶ 再開（2026-07-28〜）：案件再送（遊技機 情シス・インフラリーダー案件）を受け、日次自動マッチングを再開。
+  schedule:
+    # GitHub ActionsのcronはUTC。7:00 JST = 22:00 UTC（前日）。
+    # ★狙いを7:00 JSTに前倒し。GitHubのschedule起動は数十分〜1時間超遅延することがあり、
+    #   その遅延を見込んでも「8:30までに手元（Notion / sales@ Drafts）に揃う」ためのバッファ。
+    - cron: "0 22 * * *"
+  push:
+    branches: ["claude/focused-bell-kt8d7o"]   # 一時：マージで本日分を即実行（実行確認後に除去する）
+  workflow_dispatch: {}   # 手動実行
 
 jobs:
   ses-matching:
