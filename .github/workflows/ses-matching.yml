@@ -34,7 +34,7 @@ jobs:
           IMAP_USER: ${{ secrets.IMAP_USER }}                   # contact@reorga.co.jp（受信専用）
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}           # ★Secretsで渡す（コードに書かない）
           IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}                  # 任意（既定 INBOX / SES/REOorGA）
-          FRESH_DAYS: ${{ vars.FRESH_DAYS }}                    # 任意（既定 5）
+          FRESH_DAYS: ${{ vars.FRESH_DAYS || '3' }}            # 鮮度厳重＝配信3日以内（遊技機案件・他決リスク回避）。varで上書き可
           MAX_FETCH: ${{ vars.MAX_FETCH }}                      # 任意（既定 2500・最新何件まで取得）
           MSG_BYTES: ${{ vars.MSG_BYTES }}                      # 任意（既定 40000・1通の取得バイト数）
           STAGE2_MAX: ${{ vars.STAGE2_MAX }}                    # 任意（既定 60・AI採点に回す上限）
