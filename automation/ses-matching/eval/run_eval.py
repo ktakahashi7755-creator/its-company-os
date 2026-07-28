@@ -667,12 +667,56 @@ def eval_watermark():
     return ok == tot
 
 
+def eval_agegate():
+    """年齢ハード上限ゲート（AGE_HARD_LIMIT=35）を検証：36歳以上は除外、跨ぐ/不明は本命保留。決定論・APIキー不要。"""
+    print("── 年齢ハード上限ゲート（reconcile_scores・AGE_HARD_LIMIT=35・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    def cand(eng, age, score=95):
+        return {"case": "C", "engineer": eng, "age": age, "score": score,
+                "breakdown": {"必須": 30, "鮮度": 15, "単価": 15, "商流": 15, "タイミング": 10, "見せ方": 10, "継続": 5},
+                "reason": "サーバWindows Server/AD と ネットワークCisco/多拠点 の両刀・情シス・PL進捗管理", "summary": "両刀"}
+
+    saved = R.AGE_HARD_LIMIT
+    R.AGE_HARD_LIMIT = 35
+    try:
+        res = {"candidates": [cand("A", "28歳"), cand("B", "36歳"), cand("C", "40代"), cand("D", "50代"),
+                              cand("E", "30代"), cand("F", "不明"), cand("G", "35歳")]}
+        R.reconcile_scores(res)
+        engs = {c["engineer"] for c in res["candidates"]}
+        excl = " ".join(e.get("item", "") for e in res.get("excluded", []))
+        by = {c["engineer"]: c for c in res["candidates"]}
+        chk("28歳は残る", "A" in engs)
+        chk("35歳(境界)は残る", "G" in engs)
+        chk("36歳は除外", "B" not in engs and "B ×" in excl)
+        chk("40代は除外", "C" not in engs and "C ×" in excl)
+        chk("50代は除外", "D" not in engs and "D ×" in excl)
+        chk("30代(跨ぐ)は残るが本命保留", "E" in engs and by.get("E", {}).get("pickup") is False)
+        chk("不明は残るが本命保留", "F" in engs and by.get("F", {}).get("pickup") is False)
+        chk("30代/不明に年齢要確認フラグ", all("年齢要確認" in " ".join(by[e].get("flags", [])) for e in ("E", "F")))
+        chk("28歳/35歳は本命(pickup)可", by.get("A", {}).get("pickup") is True and by.get("G", {}).get("pickup") is True)
+        # ゲート無効（None）時は従来どおり除外しない（一般ガードレール維持）
+        R.AGE_HARD_LIMIT = None
+        res2 = {"candidates": [cand("H", "50代")]}
+        R.reconcile_scores(res2)
+        chk("AGE_HARD_LIMIT無効時は50代も残る", any(c["engineer"] == "H" for c in res2["candidates"]))
+    finally:
+        R.AGE_HARD_LIMIT = saved
+    print(f"   年齢ゲート 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
-                             "watermark", "reconcile", "pickup", "scoring", "all"],
+                             "watermark", "reconcile", "pickup", "agegate", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -707,6 +751,8 @@ def main():
         results.append(eval_reconcile())
     if args.stage in ("pickup", "all"):
         results.append(eval_pickup())
+    if args.stage in ("agegate", "all"):
+        results.append(eval_agegate())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）
