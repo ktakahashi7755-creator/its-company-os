@@ -134,7 +134,7 @@ def main():
     print("■ 送信前チェック（代表・reply-template.md）")
     print(f"  [ ] From が ITSセールス（{SALES_FROM}）か／REOorGA（{REOORGA_ADDR}）になっていないか")
     print(f"  [ ] To が配信元担当のアドレスか（現在: {cand.get('to','要・宛先確認')}）")
-    print("  [ ] 両刀（NW×Sec）・単価枠内（粗利¥8万）・商流OK・稼働開始が合うか")
+    print("  [ ] 両刀（サーバ×NW）＋情シス/PL・単価枠内（支払92万以下・粗利¥8万）・商流OK・稼働開始が合うか")
     print("  [ ] スキルシートに誇張・虚偽がないか（強調順の最適化のみ）")
     if flags:
         print(f"  [ ] 属性フラグ（{flags}）を代表判断済みか")

@@ -1,0 +1,45 @@
+name: SESマッチング精度ゲート（eval）
+
+# PR/デフォルトブランチ更新のたびに、SESマッチングの精度evalを回して**退行を検知**する。
+# 決定論ステージ（--stage all）はAPIキー不要で必ず走り、失敗すればPRを止める（＝精度の回帰ガード）。
+# 段階②（LLM採点の帯一致）はキーがあれば計測するが**非ゲート**（LLMの揺れでPRを止めない）。
+# メール送信・Notion反映・実マッチングは一切しない（evalのみ）。
+
+on:
+  pull_request:
+  push:
+    branches: ["claude/focused-bell-kt8d7o"]
+  workflow_dispatch:
+    inputs:
+      scoring_model:
+        description: "段階②の採点モデル（例 gpt-4o／空欄は既定 gpt-4o-mini）。手動計測時のみ有効。"
+        required: false
+        default: ""
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r automation/requirements.txt
+      - name: Eval gate (決定論・APIキー不要・退行検知＝失敗でPRを止める)
+        run: |
+          python automation/ses-matching/eval/run_eval.py --stage all
+          python automation/ses-matching/eval/crossmatch_eval.py --stage all
+      - name: 段階② LLM採点の帯一致（手動実行時のみ・キーがあれば計測・非ゲート）
+        # コスト最優先（Phase 0）：LLM課金を毎pushで発生させない。精度計測したい時だけ
+        # Actions の「Run workflow」（workflow_dispatch）で回す。決定論ゲートは常に自動で走る。
+        # scoring_model 入力でモデルを上書き可（例 gpt-4o）。空欄なら vars.OPENAI_MODEL→既定 gpt-4o-mini。
+        if: github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ github.event.inputs.scoring_model || vars.OPENAI_MODEL || 'gpt-4o' }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+        run: |
+          python automation/ses-matching/eval/run_eval.py --stage scoring
