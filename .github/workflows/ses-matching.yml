@@ -1,19 +1,22 @@
 name: SES自動マッチング
 
 on:
-  # ▶ 再開（2026-07-28〜）：案件再送（遊技機 情シス・インフラリーダー案件）を受け、日次自動マッチングを再開。
+  # ✅ 再開（2026-07-22）：案件を新スコープ（遊技機 情シスインフラPL＝サーバ×NW両刀）へ改定し再稼働。
+  #   停止経緯：KNさんが旧スコープ(NW/Sec)でオファー獲得→スコープ見直しで一時停止（2026-07-21）→新スコープで再開。
+  #   停止するには下の schedule ブロックを再コメントアウトする（cron はそのまま）。案件本体は automation/ses-matching/ 直下。
   schedule:
     # GitHub ActionsのcronはUTC。7:00 JST = 22:00 UTC（前日）。
     # ★狙いを7:00 JSTに前倒し。GitHubのschedule起動は数十分〜1時間超遅延することがあり、
     #   その遅延を見込んでも「8:30までに手元（Notion / sales@ Drafts）に揃う」ためのバッファ。
     - cron: "0 22 * * *"
   push:
-    branches: ["claude/focused-bell-kt8d7o"]   # 一時：マージで本日分を即実行（実行確認後に除去する）
-  workflow_dispatch: {}   # 手動実行
+    branches: ["claude/focused-bell-kt8d7o"]   # 一時：新スコープ(サーバ×NW)＋07-28JD値で本日分を即実行（確認後に除去）
+  workflow_dispatch: {}   # 手動実行は残す（配線確認用）
 
 jobs:
   ses-matching:
     runs-on: ubuntu-latest
+    timeout-minutes: 25   # ハング防止：IMAP/採点/Notionが詰まっても25分で失敗させ、ログを読める状態にする
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,7 +28,7 @@ jobs:
       - name: Run SES matching (IMAP -> score -> digest/Notion)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}         # あればOpenAIを自動採用（安価）
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}                # 任意（既定 gpt-4o-mini）
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o' }}   # 既定 gpt-4o（代表決定2026-07-22：本命1.00・年齢flag原則回復）。vars.OPENAI_MODEL で上書き可
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}                # 任意（openai / anthropic 明示指定）
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # OpenAIを使わない場合のみ
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}          # 任意（既定 claude-sonnet-4-6）
@@ -34,10 +37,11 @@ jobs:
           IMAP_USER: ${{ secrets.IMAP_USER }}                   # contact@reorga.co.jp（受信専用）
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}           # ★Secretsで渡す（コードに書かない）
           IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}                  # 任意（既定 INBOX / SES/REOorGA）
-          FRESH_DAYS: ${{ vars.FRESH_DAYS || '3' }}            # 鮮度厳重＝配信3日以内（遊技機案件・他決リスク回避）。varで上書き可
-          MAX_FETCH: ${{ vars.MAX_FETCH }}                      # 任意（既定 2500・最新何件まで取得）
+          FRESH_DAYS: ${{ vars.FRESH_DAYS || '3' }}            # 鮮度厳重＝配信3日以内（代表指示2026-07-28・他決リスク回避）。vars.FRESH_DAYS で上書き可
+          MAX_FETCH: ${{ vars.MAX_FETCH || '500' }}             # 既定500に短縮（休止中の受信バックログでIMAP取得が長引く/詰まるのを防ぐ。鮮度5日窓には十分）。vars.MAX_FETCH で上書き可
           MSG_BYTES: ${{ vars.MSG_BYTES }}                      # 任意（既定 40000・1通の取得バイト数）
           STAGE2_MAX: ${{ vars.STAGE2_MAX }}                    # 任意（既定 60・AI採点に回す上限）
+          PICKUP_MIN: ${{ vars.PICKUP_MIN || '90' }}           # 本命(自動下書き/Notion)しきい値。代表指示2026-07-22で90点以上に絞る（既定85→90）。vars.PICKUP_MIN で上書き可
           SALES_FROM: ${{ vars.SALES_FROM }}                   # 任意（既定 sales@its-tokyo.com）
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}             # Notion連携トークン
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}         # ★親ページID（配下に日次候補ページを自動作成）

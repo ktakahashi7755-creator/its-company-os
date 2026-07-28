@@ -8,12 +8,12 @@ name: SES自動マッチング（ポーリング＝配信即マッチング）
 #    メール→webhook→repository_dispatch の外部経路（Cloudflare Email Worker 等）が必要＝Phase 0では固定費増のため見送り。
 
 on:
-  # 🛑 一時停止中（2026-07-21〜）：案件スコープ見直しのためポーリング（配信即マッチング）を停止。
-  #   きっかけ：KNさんがオファー獲得＝遊技機NW/Sec案件は充足／スコープ見直しへ。代表から案件を再送後に再開する。
-  #   再開するには下の schedule ブロックのコメントを外す（cron はそのまま）＋ 新案件を automation/ses-matching/ に置く。
-  # schedule:
-  #   # UTC。JST 7:00–20:30 をカバー（22:00–11:30 UTC）で30分毎。夜間(JST21–翌6時)は停止＝Actions分数の節約。
-  #   - cron: "*/30 22-23,0-11 * * *"
+  # ✅ 再開（2026-07-22）：案件を新スコープ（遊技機 情シスインフラPL＝サーバ×NW両刀）へ改定し再稼働。
+  #   停止経緯：KNさんが旧スコープ(NW/Sec)でオファー獲得→スコープ見直しで一時停止（2026-07-21）→新スコープで再開。
+  #   停止するには下の schedule ブロックを再コメントアウトする（cron はそのまま）。案件本体は automation/ses-matching/ 直下。
+  schedule:
+    # UTC。JST 7:00–20:30 をカバー（22:00–11:30 UTC）で30分毎。夜間(JST21–翌6時)は停止＝Actions分数の節約。
+    - cron: "*/30 22-23,0-11 * * *"
   workflow_dispatch: {}   # 手動実行は残す
 
 # 前の実行が走っている間は新規を待たせる（ウォーターマーク/下書きへの二重処理を防ぐ）。
@@ -24,6 +24,7 @@ concurrency:
 jobs:
   ses-matching-poll:
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # ハング防止：IMAP/採点/Notionが詰まっても20分で失敗させ、ログを読める状態にする
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,7 +46,7 @@ jobs:
       - name: Run SES matching (incremental＝新着だけ採点)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o' }}   # 既定 gpt-4o（代表決定2026-07-22）。vars.OPENAI_MODEL で上書き可
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
@@ -55,9 +56,10 @@ jobs:
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
           IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}
           FRESH_DAYS: ${{ vars.FRESH_DAYS }}
-          MAX_FETCH: ${{ vars.MAX_FETCH }}
+          MAX_FETCH: ${{ vars.MAX_FETCH || '500' }}            # 既定500に短縮（バックログでのIMAP詰まり防止・鮮度5日窓に十分）。vars.MAX_FETCH で上書き可
           MSG_BYTES: ${{ vars.MSG_BYTES }}
           STAGE2_MAX: ${{ vars.STAGE2_MAX }}
+          PICKUP_MIN: ${{ vars.PICKUP_MIN || '90' }}           # 本命しきい値90点以上（代表指示2026-07-22）。vars.PICKUP_MIN で上書き可
           SALES_FROM: ${{ vars.SALES_FROM }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
