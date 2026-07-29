@@ -1,0 +1,12 @@
+{
+  "case_id": "20260711_遊技機情シスインフラPL",
+  "case_title": "大手遊技機メーカー 情シス支援・インフラリーダー（恵比寿）",
+  "axis": "サーバ×NW",
+  "age_hard_limit": 35,
+  "fresh_days": 5,
+  "pickup_min": 85,
+  "client_rate": "100〜120万",
+  "engineer_rate_pref": "80〜90万",
+  "updated": "2026-07-29",
+  "note": "このファイルが現在アクティブな案件の設定（軸/年齢/単価/しきい値）。新案件はIssue受付→intakeがこれを差し替える。手編集も可。"
+}

@@ -60,35 +60,70 @@ OPENAI_MODEL = _env("OPENAI_MODEL", "gpt-4o-mini")          # 安価。必要な
 ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 SALES_FROM = _env("SALES_FROM", "sales@its-tokyo.com")
 REOORGA_ADDR = _env("IMAP_USER", "contact@reorga.co.jp")
-FRESH_DAYS = int(_env("FRESH_DAYS", "5"))
+FRESH_DAYS = 5   # 実値は下の ACTIVE_CASE 読込後に確定（env > active-case.json > 既定）
 
-# 段階①：まず"どれか1つでも"含む広い門（空にすれば全通過）。
-PREFILTER_KEYWORDS = [
-    "ネットワーク", "セキュリティ", "NW", "インフラ", "サーバ", "server",
-    "cisco", "aruba", "yamaha", "f5", "vmware", "hyper-v", "fw", "firewall",
-    "linux", "windows", "security", "pl", "pm",
-]
+# 段階①の語彙は「軸」プリセットで持つ（新案件はコード編集不要＝active-case.json の axis で切替）。
+# ASCII語は _kw_pattern の語境界一致で誤爆を防ぐ。製品名/ディストリ/役割語も収録し取りこぼしを防ぐ。
+_KW_SERVER = [
+    "サーバ", "server", "windows server", "windowsserver", "active directory", "activedirectory",
+    "ad", "hyper-v", "hyperv", "vmware", "vsphere", "esxi", "linux", "windows",
+    "rhel", "centos", "ubuntu", "redhat", "red hat", "wsus", "iis", "ドメインコントローラ",
+    "グループポリシー", "gpo", "仮想", "仮想基盤", "仮想化", "オンプレ", "on-premise", "on-prem"]
+_KW_NW = [
+    "ネットワーク", "network", "nw", "cisco", "aruba", "yamaha", "f5", "juniper", "arista",
+    "ルーティング", "ルーター", "ルータ", "スイッチ", "スイッチング", "ロードバランサ", "負荷分散",
+    "l2", "l3", "lan", "wan", "vlan", "vpn", "bgp", "ospf", "sd-wan", "sdwan", "proxy", "router",
+    "多拠点", "無線", "wi-fi", "wifi", "回線", "tcp/ip"]
+_KW_SEC = [
+    "セキュリティ", "security", "ファイアウォール", "firewall", "fw", "utm", "ids", "ips",
+    "脆弱", "soc", "waf", "paloalto", "palo alto", "fortigate", "fortinet", "edr", "xdr",
+    "siem", "soar", "ゼロトラスト", "サイバー", "インシデント", "csirt", "waf"]
+# 両刀の軸プリセット（active-case.json の "axis" で選ぶ。各グループから最低1語必須＝AND of OR）
+AXIS_PRESETS = {
+    "サーバ×NW": [_KW_SERVER, _KW_NW],
+    "NW×セキュリティ": [_KW_NW, _KW_SEC],
+    "サーバ×セキュリティ": [_KW_SERVER, _KW_SEC],
+    "指定なし（広め）": [],       # グループゲート無効＝広い門(KEYWORDS)のみ
+}
+# 広い門（どれか1語。空にすれば全通過）。全軸の語彙の和集合＋汎用語。
+PREFILTER_KEYWORDS = sorted(set(_KW_SERVER + _KW_NW + _KW_SEC + ["インフラ", "pl", "pm", "情シス"]))
 
-# 段階①（案件特化）：各グループから最低1語を含むことを必須にする（AND of OR）。
-# 現在のアクティブ案件＝遊技機 情シスインフラPL は「サーバ AND ネットワーク」の両刀が必須。
-# → サーバ群とNW群の両方にヒットする要員だけを通し、両刀（サーバ×NW）人材を的確に絞る。空リストにすると無効。
-# ※情シス目線・PL/リーダー・セキュリティ(EDR初動等)は「足切り」ではなく scoring.md の採点で評価する
-#   （情シス/PLをハードゲートにすると recall を落とすため。セキュリティは本案件では歓迎＝加点）。
-PREFILTER_GROUPS = [
-    # サーバ群（recall向け同義語を拡充。ASCII語は _kw_pattern の語境界一致で誤爆を防ぐ）
-    # ※製品名/ディストリ名で書かれる実データを取りこぼさないため distro/役割語も収録。
-    #   DNS/DHCP は NW側とも解釈が割れる曖昧語のため意図的に不採用（サーバ信号を薄めない＝precision維持）。
-    ["サーバ", "server", "windows server", "windowsserver", "active directory", "activedirectory",
-     "ad", "hyper-v", "hyperv", "vmware", "vsphere", "esxi", "linux", "windows",
-     "rhel", "centos", "ubuntu", "redhat", "red hat", "wsus", "iis", "ドメインコントローラ",
-     "グループポリシー", "gpo",
-     "仮想", "仮想基盤", "仮想化", "オンプレ", "on-premise", "on-prem"],
-    # ネットワーク群（同上）
-    ["ネットワーク", "network", "nw", "cisco", "aruba", "yamaha", "f5", "juniper", "arista",
-     "ルーティング", "ルーター", "ルータ", "スイッチ", "スイッチング", "ロードバランサ", "負荷分散",
-     "l2", "l3", "lan", "wan", "vlan", "vpn", "bgp", "ospf", "sd-wan", "sdwan", "proxy", "router",
-     "多拠点", "無線", "wi-fi", "wifi", "回線", "tcp/ip"],
-]
+
+def _load_active_config():
+    """automation/ses-matching/active-case.json（有れば）を読む。新案件の軸/年齢/単価/しきい値を
+    データ駆動で切り替えるための設定（Issue受付→intake が生成）。無ければ {}（＝従来の既定動作）。"""
+    path = os.path.join(HERE, "active-case.json")
+    try:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+            return d if isinstance(d, dict) else {}
+    except Exception:  # noqa  壊れた設定で本体を止めない
+        pass
+    return {}
+
+
+ACTIVE_CASE = _load_active_config()
+# 現在の両刀ゲート＝active-case.json の axis（無ければ既定サーバ×NW）。intake が axis を書き換えるだけで切替。
+PREFILTER_GROUPS = AXIS_PRESETS.get(ACTIVE_CASE.get("axis"), [_KW_SERVER, _KW_NW])
+
+
+def _cfg_int(env_key, cfg_key, default):
+    """数値設定の優先順位：環境変数(GitHub Variable等) > active-case.json > コード既定。"""
+    v = _env(env_key)
+    if v and str(v).strip().lstrip("-").isdigit():
+        return int(v)
+    cv = ACTIVE_CASE.get(cfg_key)
+    if isinstance(cv, bool):
+        return default
+    if isinstance(cv, (int, float)):
+        return int(cv)
+    if isinstance(cv, str) and cv.strip().lstrip("-").isdigit():
+        return int(cv)
+    return default
+
+
+FRESH_DAYS = _cfg_int("FRESH_DAYS", "fresh_days", 5)
 
 # 採点で必須の設計ファイルだけ（プロンプト肥大／TPM超過を避ける）。ガードレールはSYSTEM_PROMPTに内蔵。
 SPEC_FILES = ["scoring.md", "signature.md"]
@@ -661,12 +696,20 @@ BAND_MID = 60    # scoring.md：中＝60-79／60未満＝低・除外
 # 「本命（自動下書き・提案対象＝面談依頼が確実に来る母集団）」の下限スコア。
 # ここに載る候補だけを sales@ 自動下書き・Notion送信トラッカーへ回す（＝確度最優先の絞り込み）。
 # 60-84 の候補は digest/日次ページに「参考」として可視化するが、自動アクションはしない（代表が一点確認してから）。
-PICKUP_MIN = int(_env("PICKUP_MIN", "85"))
+PICKUP_MIN = _cfg_int("PICKUP_MIN", "pickup_min", 85)
 # 年齢ハード上限（例 35＝36歳以上は選定しない）。**代表が明示した案件のみ有効**＝既定は無効(None)で
 # 従来の「属性は自動除外せずフラグ」を維持（属性選別は法令グレー・最終判断は代表）。代表がこの案件で
 # 「36歳以上は選定しない」と明示したため、workflowで AGE_HARD_LIMIT=35 を渡してハード除外する。
+# 年齢ハード上限：環境変数 > active-case.json > 無効(None)。既定は無効＝一般ガードレール（属性は自動除外しない）維持。
 _ahl = _env("AGE_HARD_LIMIT")
-AGE_HARD_LIMIT = int(_ahl) if (_ahl and str(_ahl).strip().lstrip("-").isdigit()) else None
+if _ahl and str(_ahl).strip().lstrip("-").isdigit():
+    AGE_HARD_LIMIT = int(_ahl)
+elif isinstance(ACTIVE_CASE.get("age_hard_limit"), (int, float)) and not isinstance(ACTIVE_CASE.get("age_hard_limit"), bool):
+    AGE_HARD_LIMIT = int(ACTIVE_CASE["age_hard_limit"])
+elif isinstance(ACTIVE_CASE.get("age_hard_limit"), str) and ACTIVE_CASE["age_hard_limit"].strip().isdigit():
+    AGE_HARD_LIMIT = int(ACTIVE_CASE["age_hard_limit"])
+else:
+    AGE_HARD_LIMIT = None
 
 
 def _parse_age(age_str):

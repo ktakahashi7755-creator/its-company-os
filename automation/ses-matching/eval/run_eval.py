@@ -25,6 +25,14 @@ PARENT = os.path.dirname(HERE)
 sys.path.insert(0, PARENT)
 import run_ses_matching as R  # noqa: E402
 
+# eval のフィクスチャは「サーバ×NW軸・鮮度5日・本命85点」を前提に作られている。
+# active-case.json（＝その時アクティブな案件）の軸/鮮度/しきい値に依存せず、エンジンのロジックを
+# 安定して回帰検証するため、決定論evalの間は参照値を固定する（intakeで別軸/別しきい値の案件が
+# 来ても退行検知が誤検知しない）。年齢ゲートは各ステージが個別に制御する。
+R.PREFILTER_GROUPS = R.AXIS_PRESETS["サーバ×NW"]
+R.FRESH_DAYS = 5
+R.PICKUP_MIN = 85
+
 BASE_DATE = datetime.date(2026, 7, 12)  # fixtures の基準日（決定論のため固定）
 
 # 下書き系テスト（finalize/drafts）が使う案件本文の**固定フィクスチャ**。
@@ -604,12 +612,13 @@ def eval_pickup():
     chk("サーバのみ→False", R._text_has_two_sided("Windows Server/AD/VMware専任で仮想基盤を構築") is False)
 
     # reconcile_scores が pickup を付与し、85+×片刀根拠には保留フラグを立てる
+    # age は年齢ゲートと独立に pickup を見るため ≤上限 の確定値（30歳）を付す（年齢ゲートは eval_agegate で別途検証）
     res = R.reconcile_scores({"candidates": [
-        {"engineer": "A", "case": "X", "reason": two_sided,   # 92・両刀 → 本命
+        {"engineer": "A", "case": "X", "reason": two_sided, "age": "30歳",   # 92・両刀 → 本命
          "breakdown": {"必須": 28, "鮮度": 15, "単価": 15, "商流": 15, "タイミング": 10, "見せ方": 7, "継続": 2}},
-        {"engineer": "B", "case": "X", "reason": nw_only,      # 90だが片刀 → 本命でない＋保留フラグ
+        {"engineer": "B", "case": "X", "reason": nw_only, "age": "30歳",      # 90だが片刀 → 本命でない＋保留フラグ
          "breakdown": {"必須": 30, "鮮度": 15, "単価": 15, "商流": 15, "タイミング": 10, "見せ方": 5, "継続": 0}},
-        {"engineer": "C", "case": "X", "reason": two_sided,    # 70 → 中・参考（本命でない）
+        {"engineer": "C", "case": "X", "reason": two_sided, "age": "30歳",    # 70 → 中・参考（本命でない）
          "breakdown": {"必須": 22, "鮮度": 13, "単価": 12, "商流": 8, "タイミング": 10, "見せ方": 4, "継続": 1}}],
         "excluded": []})
     cA, cB, cC = res["candidates"]
@@ -711,12 +720,55 @@ def eval_agegate():
     return ok == tot
 
 
+def eval_intake():
+    """新案件受付（intake_case）の決定論生成を検証：フォーム解析・年齢行除去・単価正規化・軸プリセット・
+    active-case.json の値。ここが壊れると『Issue貼るだけ』の自動設定が誤る。決定論・APIキー不要。"""
+    import intake_case as IC
+    print("── 新案件受付 intake（フォーム→設定・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    body = (
+        "### 案件名（短い識別名）\n\nテスト案件\n\n"
+        "### 案件JD（全文貼り付け）\n\n■必須\n・サーバとNW両方\n・35歳まで\n■単価\n・80〜90万円前後\n\n"
+        "### 両刀の軸\n\nNW×セキュリティ（ネットワーク と セキュリティ）\n\n"
+        "### 年齢方針\n\n35歳・ハード除外（36歳以上は選定しない）\n\n"
+        "### クライアント支払単価\n\n100〜120万\n\n"
+        "### 要員希望単価（優先したいレンジ）\n\n80〜90万\n\n"
+        "### 鮮度（配信何日以内を対象にするか）\n\n7\n\n"
+        "### 本命しきい値（点）\n\n80\n")
+    active, case_md, case_id = IC.run(body, "2026-07-29")
+    chk("軸→NW×セキュリティ", active["axis"] == "NW×セキュリティ")
+    chk("年齢ハード上限=35", active["age_hard_limit"] == 35)
+    chk("鮮度=7", active["fresh_days"] == 7)
+    chk("本命しきい値=80", active["pickup_min"] == 80)
+    chk("クライアント単価を保持", active["client_rate"] == "100〜120万")
+    chk("案件ID=日付+slug", case_id == "20260729_テスト案件")
+    # MAIL-BLOCK：年齢行が除去され、単価は要員向けに正規化される
+    mb = case_md.split("MAIL-BLOCK-START -->")[1]
+    chk("MAIL-BLOCKに年齢が出ない", "35歳" not in mb and "年齢" not in mb)
+    chk("MAIL-BLOCKの単価は要員向け", "80〜90万" in mb and "100〜120万" not in mb)
+    # フラグのみ→age_hard_limit None
+    body2 = body.replace("35歳・ハード除外（36歳以上は選定しない）", "フラグのみ（除外しない・代表確認）")
+    active2, _, _ = IC.run(body2, "2026-07-29")
+    chk("フラグのみ→age_hard_limit=None", active2["age_hard_limit"] is None)
+    # 軸プリセットが engine と一致（NW×セキュリティはセキュリティ語を含む）
+    groups = R.AXIS_PRESETS.get(active["axis"])
+    chk("軸プリセットにセキュリティ語(edr)", any("edr" in g for g in groups[1]))
+    print(f"   新案件受付 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
-                             "watermark", "reconcile", "pickup", "agegate", "scoring", "all"],
+                             "watermark", "reconcile", "pickup", "agegate", "intake", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -753,6 +805,8 @@ def main():
         results.append(eval_pickup())
     if args.stage in ("agegate", "all"):
         results.append(eval_agegate())
+    if args.stage in ("intake", "all"):
+        results.append(eval_intake())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）
