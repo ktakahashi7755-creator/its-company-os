@@ -8,6 +8,23 @@
 
 ---
 
+## ✅ 済（2026-07-29）：新案件を「Issue貼るだけ→自動PR→マージ」で受付（会話レス化）
+
+代表の要望「案件が来るたびに新規スレッドで会話設定するのが面倒」への恒久対策。
+
+- **設定のデータ駆動化**：軸(プレフィルタ)/年齢ハード上限/鮮度/本命しきい値/単価を **`active-case.json`** に集約。
+  `run_ses_matching.py` が起動時に読み込む（優先順位＝環境変数 > active-case.json > 既定）。軸は `AXIS_PRESETS`
+  （サーバ×NW／NW×セキュリティ／サーバ×セキュリティ／指定なし）から選ぶだけ＝**新案件でコード編集不要**。
+- **Issue受付フォーム** `.github/ISSUE_TEMPLATE/新案件.yml`：スマホのGitHubアプリで「新案件」Issueを立て、
+  JD＋数項目（両刀の軸・年齢方針・単価・鮮度・しきい値）を選ぶだけ。
+- **受付ワークフロー** `.github/workflows/ses-case-intake.yml`：Issue(ラベル`新案件`)→ `intake_case.py` が
+  **決定論で** active-case.json ＋ 案件ファイル（必須条件＋客先MAIL-BLOCK）を生成→eval gate→**PR自動作成**＋Issueへ返信。
+  旧アクティブ案件は archive/ へ退避。**代表はPRをマージするだけ**（会話ゼロ）。MAIL-BLOCKは**年齢を自動除去・単価は要員向けに正規化**。
+- **eval**：`intake`(10/10) 追加＝17ステージ全緑。evalは参照値（サーバ×NW/5日/85点）を固定し、active-case.jsonの
+  軸/しきい値に依存せずロジックを回帰（別軸の案件受付でもgateが誤検知しない）を確認。
+- **代表の一度きり設定**：GitHub → Settings → Actions → General → Workflow permissions で
+  「Allow GitHub Actions to create and approve pull requests」を有効化（受付ワークフローがPRを作るため）。
+
 ## ✅ 済（2026-07-28）：年齢35歳ハード上限＋単価構造の確定（代表方針）
 
 - **年齢：36歳以上は選定しない（ハード除外）**。`AGE_HARD_LIMIT=35`（既定無効・代表明示の案件のみ有効）。

@@ -1,0 +1,67 @@
+name: 新案件 受付（Issue→設定PR自動生成）
+
+on:
+  issues:
+    types: [opened, labeled]
+
+# 案件ファイル/設定を生成しPRを開くため、書き込み権限を付与
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  intake:
+    # 「新案件」ラベルが付いたIssueだけ処理
+    if: contains(github.event.issue.labels.*.name, '新案件')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 案件設定を生成（決定論・LLM不使用）
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python automation/ses-matching/intake_case.py --date "$(date +%F)"
+
+      - name: Eval gate（生成した active-case.json で退行が無いか）
+        run: python automation/ses-matching/eval/run_eval.py --stage all
+
+      - name: ブランチ作成・コミット・PR作成・Issueへ返信
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -e
+          BRANCH="intake/case-${ISSUE_NUM}-$(date +%s)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          printf '%s\n' "feat(ses): 新案件受付 #${ISSUE_NUM}（${ISSUE_TITLE}）" "" "Issue #${ISSUE_NUM} のフォームから active-case.json と案件ファイルを自動生成（intake_case.py・決定論）。旧アクティブ案件は archive/ へ退避。マージで反映。" > "$RUNNER_TEMP/commit.txt"
+          git commit -F "$RUNNER_TEMP/commit.txt"
+          git push -u origin "$BRANCH"
+          printf '%s\n' \
+            "Issue #${ISSUE_NUM} の受付フォームから自動生成しました（決定論・LLM不使用）。" \
+            "" \
+            "## マージ前チェック（代表）" \
+            "- [ ] §7 MAIL-BLOCK（客先文面）：年齢が入っていない／単価が要員向けか" \
+            "- [ ] 両刀の軸（active-case.json の axis）が案件に合っているか" \
+            "- [ ] 年齢方針（age_hard_limit）が意図どおりか" \
+            "- [ ] 単価（client/engineer）と鮮度・本命しきい値" \
+            "" \
+            "問題なければ Merge で反映されます。旧アクティブ案件は archive/ に退避済み。" \
+            "" \
+            "closes #${ISSUE_NUM}" > "$RUNNER_TEMP/pr-body.md"
+          PR_URL=$(gh pr create --base "$BASE" --head "$BRANCH" \
+            --title "新案件反映: ${ISSUE_TITLE} (#${ISSUE_NUM})" \
+            --body-file "$RUNNER_TEMP/pr-body.md")
+          printf '%s\n' \
+            "✅ 設定PRを作成しました：${PR_URL}" \
+            "マージすればこの案件で自動マッチングが動きます（毎朝7:00 JST狙い＋手動実行可）。文面や軸を直したい場合はPR上で編集してからマージしてください。" > "$RUNNER_TEMP/comment.md"
+          gh issue comment "${ISSUE_NUM}" --body-file "$RUNNER_TEMP/comment.md"

@@ -1,0 +1,71 @@
+name: 新案件（SESマッチング）
+description: 新しく注力する案件を登録します。貼るだけで自動で設定PRが作られ、マージすれば反映されます。
+title: "[新案件] "
+labels: ["新案件"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        このフォームを送信すると、**自動で案件ファイル・設定（active-case.json）を生成しPRを作成**します。
+        代表は **PRをマージするだけ**で反映されます（会話のやり取り不要）。年齢は客先文面に出しません。
+  - type: input
+    id: name
+    attributes:
+      label: 案件名（短い識別名）
+      placeholder: 例）大手遊技機メーカー 情シスインフラPL
+    validations:
+      required: true
+  - type: textarea
+    id: jd
+    attributes:
+      label: 案件JD（全文貼り付け）
+      description: クライアントからのJDをそのまま貼ってください。年齢・単価も含めてOK（客先文面には年齢を出さず・単価は要員向けに自動整形します）。
+      placeholder: ■案件概要 … ■必須要件 … ■単価 … など
+    validations:
+      required: true
+  - type: dropdown
+    id: axis
+    attributes:
+      label: 両刀の軸（段階①の必須ゲート）
+      description: この2領域の実務が両方ある人だけを通します。迷ったら「サーバ×NW」。
+      options:
+        - サーバ×NW（サーバ と ネットワーク 両方必須）
+        - NW×セキュリティ（ネットワーク と セキュリティ）
+        - サーバ×セキュリティ（サーバ と セキュリティ）
+        - 指定なし（広め・ゲートなし）
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: age
+    attributes:
+      label: 年齢方針
+      description: 「ハード除外」＝その歳を超える要員は選定しない。「フラグのみ」＝除外せず代表確認フラグ（法令グレー配慮の既定）。
+      options:
+        - 35歳・ハード除外（36歳以上は選定しない）
+        - 40歳・ハード除外（41歳以上は選定しない）
+        - フラグのみ（除外しない・代表確認）
+        - 上限なし
+      default: 2
+    validations:
+      required: true
+  - type: input
+    id: client_rate
+    attributes:
+      label: クライアント支払単価
+      placeholder: 例）100〜120万
+  - type: input
+    id: eng_rate
+    attributes:
+      label: 要員希望単価（優先したいレンジ）
+      placeholder: 例）80〜90万
+  - type: input
+    id: fresh
+    attributes:
+      label: 鮮度（配信何日以内を対象にするか）
+      placeholder: "5"
+  - type: input
+    id: pickup
+    attributes:
+      label: 本命しきい値（点・自動下書き/Notion本命の下限）
+      placeholder: "85"
