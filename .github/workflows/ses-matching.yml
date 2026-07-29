@@ -9,8 +9,6 @@ on:
     # ★狙いを7:00 JSTに前倒し。GitHubのschedule起動は数十分〜1時間超遅延することがあり、
     #   その遅延を見込んでも「8:30までに手元（Notion / sales@ Drafts）に揃う」ためのバッファ。
     - cron: "0 22 * * *"
-  push:
-    branches: ["claude/focused-bell-kt8d7o"]   # 一時：新スコープ(サーバ×NW)＋07-28JD値で本日分を即実行（確認後に除去）
   workflow_dispatch: {}   # 手動実行は残す（配線確認用）
 
 jobs:
