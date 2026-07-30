@@ -18,6 +18,7 @@ ITS合同会社を**Claudeで経営する**ための単一ワークスペース�
 ```
 CLAUDE.md              マスター（会社の頭脳）
 docs/                  business-plan / action-plan / roadmap / financial-model / exit-plan / kpi
+                       cache-automation-strategy（24時間キャッシュマシン戦略の正本）
 skills/                tax-compliance / finance-cfo / ses-sales / ses-ops / ai-jutaku /
                        familink-dev / familink-launch / management-meeting
 skills/executives/   AI経営本部（10 CXO）／ skills/board-meeting/ AI取締役会
