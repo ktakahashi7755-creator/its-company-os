@@ -181,6 +181,38 @@ python automation/ses-matching/run_ses_crossmatch.py --source imap
 - ルーブリック：`crossmatch-scoring.md`。回帰：`eval/crossmatch_eval.py`（決定論8ステージ・APIキー不要）。
 - ワークフロー：`.github/workflows/ses-crossmatch.yml`（**schedule未有効化**。まず手動/サンプルで品質確認→代表OK後に毎朝自動化）。
 
+## 送信後フォローアップ（リマインド下書き・クロージング支援）＝ `followup.py`
+
+提案を送った後の「面談化の一歩手前」を自動化する。Notion「SES提案トラッカー」の **ステータス=送信済** の行で、
+`last_edited_time`（代表が『送信済』にした時刻）を送信日の代理値に、**営業日経過（既定3営業日）**を数え、
+**音沙汰が無い提案へリマインド返信の下書き**＋**クロージング支援メモ（面談日程調整の定型文＋単価交渉の想定問答）**を
+sales@ の下書き(Drafts)へ自動生成する。**送信は常に人手**（下書きのみ）。設計思想は `../../docs/cache-automation-strategy.md` §6-②。
+
+- **リマインド**：`template-リマインド.txt`＋署名で決定論生成。件名 `Re:〇〇の件_ITS村山`。
+- **クロージング支援メモ**：本文末尾に「送信前に削除」の注記付きで同梱＝返信が来たら面談調整文をそのまま使い、
+  単価交渉は想定問答を見て即応できる。**単価は実額があれば使い、無ければ「要確認」**（捏造しない・粗利死守¥8万）。
+- **重複防止**：`X-ITS-Key` は原提案キー＋`|FU{n}`（原提案の下書きと衝突しない）。Drafts検索で実行跨ぎの二重作成を防ぐ。既定1提案1通（`FOLLOWUP_MAX`）。
+- **ガードレール**：`validate_draft` 再利用（From＝sales@固定・REOorGA混入禁止・ITS識別必須）。宛先未確定は注記付きで作る。
+
+```bash
+# オフライン（Notion/IMAP不要・決定論）で対象判定と文面を確認
+python automation/ses-matching/followup.py --offline --input automation/ses-matching/examples/sample-followup.json --date 2026-07-31
+# 本番（Actions・要 NOTION_* / SALES_IMAP_* Secrets）：送信済の停滞提案へリマインド下書きを自動生成
+python automation/ses-matching/followup.py --source notion
+```
+
+- 回帰：`eval/run_eval.py --stage followup`（決定論24/24・APIキー不要）。ワークフロー：`.github/workflows/ses-followup.yml`（毎朝8:00 JST狙い・`SALES_IMAP_*`/`NOTION_*` 未登録の間はスキップ）。
+- **前提**：トラッカーで `未送信→送信済` に変える既存運用がそのまま燃料になる（追加操作なし）。
+
+### 追加の GitHub Secrets / Variables（followup）
+
+| 種別 | キー | 用途 |
+|---|---|---|
+| Secret | `NOTION_TOKEN` / `NOTION_PAGE_ID` | トラッカーDBの探索（既存と共通） |
+| Secret | `NOTION_DB_ID` | 任意（トラッカーDBのidを固定＝最も安定） |
+| Variable | `FOLLOWUP_BIZ_DAYS`(3) / `FOLLOWUP_MAX`(1) | 任意（リマインドまでの営業日・1提案あたり上限） |
+| Secret | `SALES_IMAP_HOST` / `SALES_IMAP_PASSWORD` | リマインド下書きの sales@ Drafts 保存（未設定ならスキップ） |
+
 ## さらなる拡張
 
 - スキルシート添付（Excel/PDF）の本文抽出（`pymupdf`/`openpyxl`）を取り込みに追加（`skillsheet-intake.md`）。

@@ -1,0 +1,61 @@
+name: SES送信後フォローアップ（リマインド下書き）
+
+# Notion「SES提案トラッカー」の ステータス=送信済 のうち、一定営業日（既定3）音沙汰の無い提案へ、
+# 丁寧なリマインド返信の**下書き**＋クロージング支援メモ（面談調整・単価交渉想定問答）を
+# sales@ の下書き(Drafts)へ自動生成する。**メールの自動送信はしない**（下書きのみ・人間が承認して送る）。
+#
+# 依存：トラッカーDBは run_ses_matching（毎朝の SES自動マッチング）が作成・更新する。
+#       代表が『送信済』にした時刻(last_edited_time)を送信日の代理値に使うため、代表のステータス更新が前提。
+#
+# 🛑 自動実行(schedule)は既定で有効。まず workflow_dispatch＋offline で文面を確認し、
+#    本番は SALES_IMAP_* / NOTION_* Secret 登録で下書き保存が有効化される（未登録の間はスキップ＝安全）。
+
+on:
+  schedule:
+    # UTC。8:00 JST = 23:00 UTC（前日）。毎朝の SES自動マッチング(7:00 JST)の後にトラッカーを見る。
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      offline:
+        description: "オフライン（決定論・APIキー不要・下書き保存しない）で文面確認する場合は true"
+        required: false
+        default: "false"
+
+# 同時実行を1本に（下書きの二重作成を防ぐ）。
+concurrency:
+  group: ses-followup
+  cancel-in-progress: false
+
+jobs:
+  ses-followup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r automation/requirements.txt
+      - name: Eval gate (deterministic・APIキー不要・退行検知)
+        run: python automation/ses-matching/eval/run_eval.py --stage all
+      - name: Run SES follow-up (送信済の停滞提案 → リマインド下書き)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}            # 任意（トラッカーDBのidを固定）
+          FOLLOWUP_BIZ_DAYS: ${{ vars.FOLLOWUP_BIZ_DAYS }}      # 任意（既定 3営業日）
+          FOLLOWUP_MAX: ${{ vars.FOLLOWUP_MAX }}                # 任意（既定 1通/提案）
+          MARGIN_YEN: ${{ vars.MARGIN_YEN }}                    # 任意（単価交渉メモの粗利前提・既定 ¥5万）
+          SALES_FROM: ${{ vars.SALES_FROM }}
+          SALES_IMAP_HOST: ${{ secrets.SALES_IMAP_HOST }}       # sales@ の下書き保存（未設定ならスキップ）
+          SALES_IMAP_USER: ${{ secrets.SALES_IMAP_USER }}       # 既定 sales@its-tokyo.com
+          SALES_IMAP_PASSWORD: ${{ secrets.SALES_IMAP_PASSWORD }} # ★Secret（sales@のパスワード）
+          SALES_IMAP_PORT: ${{ vars.SALES_IMAP_PORT }}          # 任意（既定 993）
+          SALES_DRAFTS_FOLDER: ${{ vars.SALES_DRAFTS_FOLDER }}  # 任意（既定 Drafts／例 INBOX.Drafts）
+        run: |
+          if [ "${{ github.event.inputs.offline }}" = "true" ]; then
+            python automation/ses-matching/followup.py --offline \
+              --input automation/ses-matching/examples/sample-followup.json
+          else
+            python automation/ses-matching/followup.py --source notion
+          fi

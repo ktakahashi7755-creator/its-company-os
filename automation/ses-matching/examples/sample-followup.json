@@ -1,0 +1,24 @@
+{
+  "_note": "followup.py のオフライン検証用ダミー（個人情報なし）。sent_date=送信済にした日の代理値。基準日 2026-07-30 で判定。",
+  "rows": [
+    {
+      "engineer": "T.Y", "case": "遊技機情シスインフラPL",
+      "person": "田中", "to": "tanaka@example-bp.co.jp",
+      "company": "サンプルBP株式会社",
+      "sent_date": "2026-07-24",
+      "client_rate_yen": 1000000, "engineer_rate_yen": 900000
+    },
+    {
+      "engineer": "K.H", "case": "遊技機情シスインフラPL",
+      "person": "佐藤", "to": "要・宛先確認",
+      "company": "サンプル商事",
+      "sent_date": "2026-07-29"
+    },
+    {
+      "engineer": "A.N", "case": "遊技機情シスインフラPL",
+      "person": "鈴木", "to": "suzuki@example2.co.jp",
+      "company": "サンプルNW株式会社",
+      "sent_date": "2026-07-22"
+    }
+  ]
+}

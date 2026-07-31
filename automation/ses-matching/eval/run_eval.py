@@ -763,12 +763,98 @@ def eval_intake():
     return ok == tot
 
 
+def eval_followup():
+    """送信後フォローアップ下書きエンジン（followup.py）を検証。決定論・Notion/IMAP不要。
+    ここが壊れると、送信済の停滞提案へリマインドが出ない／早すぎるリマインド／宛先事故／捏造単価が起きる。"""
+    import followup as F
+    print("── 送信後フォローアップ（リマインド・営業日しきい値・ガードレール・単価捏造なし）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    D = datetime.date
+    # 営業日計算（土日除外）：金→翌月は営業日1、土日跨ぎを正しく数える
+    chk("金→翌月=1営業日", F.biz_days_between(D(2026, 7, 24), D(2026, 7, 27)) == 1)
+    chk("同日=0", F.biz_days_between(D(2026, 7, 27), D(2026, 7, 27)) == 0)
+    chk("送信日不明(None)=-1", F.biz_days_between(None, D(2026, 7, 30)) == -1)
+    chk("月火水木金=5営業日", F.biz_days_between(D(2026, 7, 20), D(2026, 7, 27)) == 5)
+
+    # last_edited_time(UTC) → JST日付（+9時間で日付が繰り上がる境界）
+    chk("UTC23時台→JSTで翌日", F.parse_iso_to_jst_date("2026-07-26T23:30:00.000Z") == D(2026, 7, 27))
+    chk("不正時刻→None", F.parse_iso_to_jst_date("not-a-date") is None)
+
+    # 対象判定：しきい値3営業日。4営業日経過は対象、1営業日は対象外、送信日不明は対象外。
+    rows = [
+        {"key": "k1", "title": "T.Y × 案件A", "case": "案件A", "engineer": "T.Y",
+         "to": "a@bp.co.jp", "person": "田中", "sent_date": D(2026, 7, 24)},   # 4営業日→対象
+        {"key": "k2", "title": "K.H × 案件A", "case": "案件A", "engineer": "K.H",
+         "to": "b@bp.co.jp", "person": "佐藤", "sent_date": D(2026, 7, 29)},   # 1営業日→対象外
+        {"key": "k3", "title": "A.N × 案件A", "case": "案件A", "engineer": "A.N",
+         "to": "c@bp.co.jp", "person": "鈴木", "sent_date": None},            # 送信日不明→対象外
+    ]
+    due = F.select_due_reminders(rows, D(2026, 7, 30), threshold=3, max_fu=1, already_keys=set())
+    due_titles = {r.get("title") for r, _ in due}
+    chk("4営業日経過は対象", "T.Y × 案件A" in due_titles)
+    chk("1営業日は対象外", "K.H × 案件A" not in due_titles)
+    chk("送信日不明は対象外", "A.N × 案件A" not in due_titles)
+
+    # 重複防止：既に FU1 の下書きがあれば再度作らない（already_keys で除外）
+    due2 = F.select_due_reminders(rows, D(2026, 7, 30), 3, 1, already_keys={F.followup_key("k1", 1)})
+    chk("既存FU1は再作成しない", all(r.get("key") != "k1" for r, _ in due2))
+    chk("FUキーは原提案キーと衝突しない", F.followup_key("k1", 1) != "k1" and F.followup_key("k1", 1).endswith("|FU1"))
+
+    # 下書き文面：件名・宛先・本文・クロージング支援メモ・署名・ガードレール
+    msg, issues = F.build_reminder_message(rows[0], 1)
+    chk("下書き生成OK（違反なし）", msg is not None and issues == [])
+    body = msg.get_content() if msg else ""
+    chk("From=sales@its-tokyo.com", msg and R.SALES_FROM in msg.get("From"))
+    chk("Toは配信元担当", msg and msg.get("To") == "a@bp.co.jp")
+    chk("X-ITS-KeyにFU1", msg and msg.get("X-ITS-Key", "").endswith("|FU1"))
+    chk("本文にタイトル", "T.Y × 案件A" in body)
+    chk("クロージング支援メモ同梱", "クロージング支援メモ" in body and "面談調整" in body and "単価交渉" in body)
+    chk("メモは送信前削除の注記", "送信前に削除" in body)
+    chk("ITS識別（村山/its-tokyo.com）", "村山" in body and "its-tokyo.com" in body)
+
+    # ガードレール：REOorGA宛は下書きにしない（validate_draft 再利用）
+    bad = dict(rows[0], to="contact@reorga.co.jp")
+    mbad, ibad = F.build_reminder_message(bad, 1)
+    chk("REOorGA宛は下書き不可", mbad is None and any("REOorGA" in x for x in ibad))
+    # 宛先未確定は作るが本文冒頭に注記（誤送信より安全側）
+    unk = dict(rows[0], to="要・宛先確認")
+    munk, _ = F.build_reminder_message(unk, 1)
+    chk("宛先未確定は注記付きで作る", munk is not None and munk.get("To") is None
+        and "宛先未確定" in munk.get_content())
+
+    # 単価交渉QA：実額があれば使い、無ければ『要確認』（捏造しない）
+    qa_known = F.rate_negotiation_qa(1000000, 900000)
+    chk("実額→¥100万/¥90万/粗利¥10万", "¥100万" in qa_known and "¥90万" in qa_known and "¥10万" in qa_known)
+    qa_unknown = F.rate_negotiation_qa(None, None)
+    chk("単価不明→要確認（捏造しない）", "要確認" in qa_unknown and "¥" not in qa_unknown.replace("¥8万", ""))
+
+    # Notionページ→行の正規化（title分解・配信元→担当者・last_edited→送信日）
+    page = {"last_edited_time": "2026-07-24T02:00:00.000Z", "properties": {
+        "案件×要員": {"type": "title", "title": [{"plain_text": "T.Y × 案件A"}]},
+        "キー": {"type": "rich_text", "rich_text": [{"plain_text": "abc123"}]},
+        "宛先To": {"type": "rich_text", "rich_text": [{"plain_text": "a@bp.co.jp"}]},
+        "配信元": {"type": "rich_text", "rich_text": [{"plain_text": "サンプルBP株式会社 田中"}]}}}
+    r = F._row_from_notion_page(page)
+    chk("Notion行：key/宛先/担当者/送信日を復元", r["key"] == "abc123" and r["to"] == "a@bp.co.jp"
+        and r["person"] == "田中" and r["sent_date"] == D(2026, 7, 24) and r["engineer"] == "T.Y")
+
+    print(f"   送信後フォローアップ 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
-                             "watermark", "reconcile", "pickup", "agegate", "intake", "scoring", "all"],
+                             "watermark", "reconcile", "pickup", "agegate", "intake", "followup",
+                             "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -807,6 +893,8 @@ def main():
         results.append(eval_agegate())
     if args.stage in ("intake", "all"):
         results.append(eval_intake())
+    if args.stage in ("followup", "all"):
+        results.append(eval_followup())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）
