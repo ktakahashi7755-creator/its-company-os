@@ -193,8 +193,37 @@ def offline_e2e(chk):
     chk("digestに95%章と両面下書き", f"マッチ度{X.MATCH_MIN}%以上" in dig and "案件元への下書き" in dig and "要員元への下書き" in dig)
 
 
+def split_attach(chk):
+    """複数要員の一括配信を1人ずつに分割し、各人のスキルシートだけを紐付ける（誤添付防止）。"""
+    print("── 要員分割＋スキルシート紐付け（split_people / _files_for_person）")
+    base = {"type": "要員", "title": "人材3名紹介", "skills": ["X"], "rate_min": None, "rate_max": 60,
+            "seniority": "不明", "summary": "", "src": 0, "uid": "1", "location": "不明", "start": "不明",
+            "business_flow": "不明", "urgency": "不明", "date": None, "from_addr": "", "from_name": "",
+            "subject": "人材3名", "body": "", "person": None}
+    obj = {"type": "要員", "people": [
+        {"name": "キン", "skills": ["Java", "SQL"], "rate_max": 60, "summary": "Java10年"},
+        {"name": "ゴン", "skills": ["C#", "ASP.NET"], "rate_max": 65, "summary": "C#"},
+        {"name": "T.N", "skills": ["VB.NET"], "rate_max": 55, "summary": ".NET"}]}
+    recs = X.split_people(base, obj)
+    chk("一括配信→3人に分割", len(recs) == 3 and [r["person"] for r in recs] == ["キン", "ゴン", "T.N"])
+    chk("各人のスキルが個別に載る", recs[0]["skills"] == ["Java", "SQL"] and recs[1]["skills"] == ["C#", "ASP.NET"])
+    chk("titleが人単位（重複キー分離用）", recs[2]["title"] == "T.N")
+    chk("案件は分割しない", len(X.split_people({**base, "type": "案件"}, obj)) == 1)
+    chk("単一要員(people無し)は1件", len(X.split_people(base, {"type": "要員"})) == 1 and X.split_people(base, {})[0]["person"] is None)
+    # スキルシートの紐付け：各人は自分のファイルだけ
+    sheets = [("履歴書_キン.xls", "t", b"a"), ("スキルシート（ゴン）.xls", "t", b"b"), ("TN 百草園駅.xlsx", "t", b"c")]
+    chk("キン→履歴書_キンのみ", [f[0] for f in X._files_for_person(sheets, "キン")] == ["履歴書_キン.xls"])
+    chk("ゴン→スキルシート（ゴン）のみ", [f[0] for f in X._files_for_person(sheets, "ゴン")] == ["スキルシート（ゴン）.xls"])
+    chk("T.N→TN…（記号/空白を吸収して一致）", [f[0] for f in X._files_for_person(sheets, "T.N")] == ["TN 百草園駅.xlsx"])
+    chk("別人のファイルは混ざらない", all(len(X._files_for_person(sheets, n)) == 1 for n in ("キン", "ゴン", "T.N")))
+    chk("person無し（単一配信）は全件添付", len(X._files_for_person(sheets, None)) == 3)
+    chk("一致無し→空（誤添付を避ける）", X._files_for_person(sheets, "ザー") == [])
+    chk("_norm_name：履歴書/記号を除去", X._norm_name("履歴書_キン.xls") == "キン" and X._norm_name("T.N") == "tn")
+
+
 STAGES = {"freshness": freshness, "skills": skills, "pricing": pricing, "shortlist": shortlist,
-          "scoring": scoring, "hot": hot, "drafts": drafts, "offline_e2e": offline_e2e}
+          "scoring": scoring, "hot": hot, "drafts": drafts, "split_attach": split_attach,
+          "offline_e2e": offline_e2e}
 
 
 def main():

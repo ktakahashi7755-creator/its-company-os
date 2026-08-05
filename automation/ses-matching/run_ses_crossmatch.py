@@ -204,6 +204,10 @@ CLASSIFY_SYSTEM = """あなたはITS合同会社のSESマッチング担当AI。
 "summary":"1-2行の要約"}]}
 - skills は案件なら必須スキル、要員なら保有スキルを、具体語（製品名・言語・役割）で列挙。
 - rate は本文の数値だけを万単位で。範囲なら min/max。**記載が無ければ null（捏造禁止）。**
+- **要員で1通に複数の技術者が載っている場合（人材一覧・複数名紹介）は、必ず people 配列で1人ずつ分ける**：
+  "people":[{"name":"氏名またはイニシャル（**スキルシート/履歴書のファイル名と対応づく形**。例 キン / ゴン / T.N / SAN）",
+  "skills":[その人の保有スキル],"rate_min":数値or null,"rate_max":数値or null,"seniority":"PL/メンバー等","summary":"その人の1行要約"}]
+  people を返した要員は、各 people が別々の技術者として扱われる（別々に案件マッチングされる）。単一要員なら people 省略可。
 - 出力はこのJSONのみ（前後に文章を付けない）。"""
 
 
@@ -218,7 +222,7 @@ def classify_extract(items, base_date):
     """アイテム群を分類・構造化（LLMバッチ）。src はグローバル添字。失敗バッチは空で継続。"""
     per_item = int(R._env("CROSS_PER_ITEM_CHARS", "700"))
     chunk = int(R._env("CROSS_CLS_CHUNK", "20"))
-    enriched = [None] * len(items)
+    out = []
     for start in range(0, len(items), chunk):
         part = items[start:start + chunk]
         feed = "\n\n".join(
@@ -249,7 +253,7 @@ def classify_extract(items, base_date):
             src_item = items[src]
             # 単価は本文から決定論パースを優先（LLMの数値誤りで金額事故を起こさない）
             pmin, pmax = parse_rate_man(f"{src_item.get('subject','')} {src_item.get('body','')}")
-            rec = {
+            base = {
                 "src": src,
                 "type": obj.get("type") if obj.get("type") in ("案件", "要員") else "不明",
                 "title": obj.get("title") or src_item.get("subject") or "",
@@ -268,9 +272,35 @@ def classify_extract(items, base_date):
                 "subject": src_item.get("subject", ""),
                 "body": src_item.get("body", ""),
                 "uid": src_item.get("uid"),
+                "person": None,   # 単一要員は None（＝その配信の添付をそのまま扱う）
             }
-            enriched[src] = rec
-    return [e for e in enriched if e is not None]
+            out.extend(split_people(base, obj))
+    return out
+
+
+def split_people(base, obj):
+    """要員1通に複数技術者が居る（people 配列）場合、1人ずつのレコードに分割する。
+    person 名は配信記載の氏名/イニシャルで、後段の**スキルシート添付の紐付け**（ファイル名一致）に使う。
+    案件・単一要員は base をそのまま1件返す（後方互換）。"""
+    people = obj.get("people") if isinstance(obj.get("people"), list) else []
+    if base["type"] != "要員" or not people:
+        return [base]
+    recs = []
+    for per in people:
+        if not isinstance(per, dict):
+            continue
+        name = str(per.get("name") or "").strip()
+        if not name:
+            continue
+        recs.append({**base,
+                     "person": name,
+                     "title": name,   # 下書き・重複キーを人単位にする
+                     "skills": per.get("skills") if isinstance(per.get("skills"), list) else base["skills"],
+                     "rate_min": _norm_num(per.get("rate_min")) if per.get("rate_min") is not None else base["rate_min"],
+                     "rate_max": _norm_num(per.get("rate_max")) if per.get("rate_max") is not None else base["rate_max"],
+                     "seniority": per.get("seniority") or base["seniority"],
+                     "summary": per.get("summary") or base["summary"]})
+    return recs or [base]   # people が空実質なら base にフォールバック
 
 
 # ============================================================
@@ -498,7 +528,8 @@ def draft_to_case_source(pair):
             .replace("{提案単価}", price)).strip()
     return {"from": SALES_FROM, "to": _contact_to(case), "subject": f"RE:{cname}", "body": body,
             "attachments": talent.get("skillsheet_files", []),  # 表示用のファイル名（実体は _ss_files）
-            "_ss_files": talent.get("_ss_files", [])}
+            "_ss_files": talent.get("_ss_files", []),
+            "skillsheet_note": talent.get("skillsheet_note")}   # 一括配信で自動特定できない時の手動添付注記
 
 
 def _case_overview(case):
@@ -710,10 +741,12 @@ def render_digest(picked, base_date, n_items, n_cases, n_talents):
 
 
 def _attach_note(draft):
-    """案件元向け下書きのスキルシート添付表示。実データ実行時は該当要員の技術経歴書が自動添付される。"""
+    """案件元向け下書きのスキルシート添付表示。該当者のファイルのみ添付／一括配信で特定不能なら手動添付を注記。"""
     files = draft.get("attachments") or []
     if files:
         return "📎 添付：" + "／".join(files) + "（該当要員のスキルシート）"
+    if draft.get("skillsheet_note"):
+        return "📎 " + draft["skillsheet_note"]
     return "📎 添付：該当要員のスキルシート（実データ実行時に sales@ 下書きへ自動添付）"
 
 
@@ -951,18 +984,51 @@ def main():
             print(f"[drafts] スキップ（エラー）: {e}")
 
 
+def _norm_name(s):
+    """氏名/ファイル名を比較用に正規化（履歴書・スキルシート等の語と記号・空白を除去し小文字化）。"""
+    s = str(s or "")
+    for w in ("技術経歴書", "職務経歴書", "履歴書", "経歴書", "スキルシート", "スキル",
+              ".xlsx", ".xls", ".pdf", ".docx", ".doc"):
+        s = s.replace(w, "")
+    s = re.sub(r"[\s　_\-（）()\.、,／/【】\[\]]+", "", s)
+    return s.lower()
+
+
+def _files_for_person(sheets, person):
+    """添付(sheets=[(fname,text,payload)...])から person 名/イニシャルに一致するものだけ返す。
+    person 無し（単一要員配信）→ 全件。person 有りで一致無し→ [] （誤添付を避ける）。"""
+    if not person:
+        return sheets
+    key = _norm_name(person)
+    if not key:
+        return sheets
+    return [s for s in sheets if key in _norm_name(s[0])]
+
+
 def _enrich_pair_skillsheets(picked):
-    """マッチした要員の添付スキルシートをUIDで取得し、要約を付与（案件元下書きに添付する原本も保持）。"""
+    """マッチした要員の添付スキルシートをUIDで取得。**複数要員の一括配信では、該当者(person)のファイル名に
+    一致する原本だけを添付**（別人の履歴書の誤添付を防ぐ）。一致が特定できなければ添付せず手動添付を注記。"""
     uids = list({p["talent"].get("uid") for p in picked if p["talent"].get("uid")})
     if not uids:
         return
     msgs = R.fetch_full_by_uids(uids)
     for p in picked:
-        uid = p["talent"].get("uid")
+        t = p["talent"]
+        uid = t.get("uid")
         sheets = R.extract_skillsheets(msgs.get(uid)) if uid else []
-        if sheets:
-            p["talent"]["skillsheet_files"] = [fn for fn, _, _ in sheets]
-            p["talent"]["_ss_files"] = [(fn, payload) for fn, _, payload in sheets if payload]
+        if not sheets:
+            continue
+        person = t.get("person")
+        mine = _files_for_person(sheets, person)
+        if person and not mine:
+            # 一括配信で該当者のファイルを特定できない → 誤添付を避け、手動添付を注記（添付はしない）
+            t["skillsheet_files"] = []
+            t["_ss_files"] = []
+            t["skillsheet_note"] = (f"一括配信のため {person} 様のスキルシートは自動特定できず。"
+                                    f"配信原本（{len(sheets)}名分）から該当者分を手動添付してください")
+            continue
+        t["skillsheet_files"] = [fn for fn, _, _ in mine]
+        t["_ss_files"] = [(fn, payload) for fn, _, payload in mine if payload]
 
 
 if __name__ == "__main__":
