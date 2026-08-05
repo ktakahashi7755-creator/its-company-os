@@ -11,6 +11,8 @@ on:
   # schedule:
   #   # UTC。7:00 JST = 22:00 UTC（前日）。GitHubのschedule遅延を見込んで早めに。
   #   - cron: "0 22 * * *"
+  push:
+    branches: ["claude/focused-bell-kt8d7o"]   # 一時：本日の総当たり(案件×要員)を即実行（確認後に除去）
   workflow_dispatch:
     inputs:
       offline:
@@ -21,6 +23,7 @@ on:
 jobs:
   ses-crossmatch:
     runs-on: ubuntu-latest
+    timeout-minutes: 25   # ハング防止：IMAP/採点が詰まっても25分で失敗させログを読める状態に
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -43,8 +46,9 @@ jobs:
           IMAP_USER: ${{ secrets.IMAP_USER }}
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
           IMAP_FOLDER: ${{ vars.IMAP_FOLDER }}
-          FRESH_BIZ_DAYS: ${{ vars.FRESH_BIZ_DAYS }}      # 任意（既定 3営業日）
-          MATCH_MIN: ${{ vars.MATCH_MIN }}                # 任意（既定 95）
+          MAX_FETCH: ${{ vars.MAX_FETCH || '500' }}       # 休止中の受信バックログでIMAP取得が詰まらないよう既定500に短縮
+          FRESH_BIZ_DAYS: ${{ vars.FRESH_BIZ_DAYS || '3' }}   # 直近3営業日（本日の最新案件はhotnessで上位に出る）
+          MATCH_MIN: ${{ vars.MATCH_MIN || '85' }}        # この即実行は複数名を出すため85に緩和（既定95・rep標準）。vars.MATCH_MIN で上書き可
           MARGIN_YEN: ${{ vars.MARGIN_YEN }}              # 任意（既定 50000＝¥5万・両サイド各）
           MAX_PAIRS: ${{ vars.MAX_PAIRS }}                # 任意（既定 80・LLM採点に回すペア上限）
           SALES_FROM: ${{ vars.SALES_FROM }}
