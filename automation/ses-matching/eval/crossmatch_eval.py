@@ -132,8 +132,8 @@ def drafts(chk):
     d = X.build_pair_drafts({"case": case, "talent": talent})
     cs, ts = d["case_source"], d["talent_source"]
     chk("案件元: From=sales@", cs["from"] == R.SALES_FROM)
-    chk("案件元: 提示単価=希望75+5=80万（社内単価＋50,000円）",
-        "80万円/月" in cs["body"] and "社内単価＋50,000円" in cs["body"])
+    chk("案件元: 提示単価=希望75+5=80万（客先に出すのは金額のみ）",
+        "80万円/月" in cs["body"] and "社内単価" not in cs["body"] and "50,000" not in cs["body"])
     chk("案件元: 正式文面（件名RE:・書き出し・要員サマリー）",
         cs["subject"].startswith("RE:") and "ご紹介可能な要員をご提案いたします" in cs["body"]
         and "＜要員サマリー＞" in cs["body"])
