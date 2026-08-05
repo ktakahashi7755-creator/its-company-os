@@ -49,7 +49,7 @@ jobs:
           CROSS_STAGE2_MAX: ${{ vars.CROSS_STAGE2_MAX || '300' }}  # 分類に回す上限を200→300へ（案件/要員の母数を増やす）
           PAIR_OVERLAP_MIN: ${{ vars.PAIR_OVERLAP_MIN || '0.06' }} # 総当たり前のスキル重なり足切りを緩和（0.12→0.06）
           FRESH_BIZ_DAYS: ${{ vars.FRESH_BIZ_DAYS || '3' }}   # 直近3営業日（本日の最新案件はhotnessで上位に出る）
-          MATCH_MIN: ${{ vars.MATCH_MIN || '85' }}        # 品質寄り85（rep標準95・複数名重視なら70等へ vars.MATCH_MIN で調整）
+          MATCH_MIN: ${{ vars.MATCH_MIN || '80' }}        # マッチさせられる粒度＝品質と母数の両立（70の乱発と85の過少の中間）。vars.MATCH_MIN で調整
           MARGIN_YEN: ${{ vars.MARGIN_YEN }}              # 任意（既定 50000＝¥5万・両サイド各）
           MAX_PAIRS: ${{ vars.MAX_PAIRS || '120' }}       # LLM採点に回すペア上限を120へ（母数確保）
           SALES_FROM: ${{ vars.SALES_FROM }}

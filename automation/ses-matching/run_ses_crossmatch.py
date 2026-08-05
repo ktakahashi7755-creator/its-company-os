@@ -490,7 +490,7 @@ def draft_to_case_source(pair):
     q = quote_to_case(talent.get("rate_max"))
     cname = R._fmt_reply_subject(case.get("title") or "貴社案件")
     tmpl = R.read("template-案件元向け.txt") or _CASE_SOURCE_FALLBACK
-    price = (fmt_man(q) + "（社内単価＋50,000円）") if isinstance(q, int) else fmt_man(q)
+    price = fmt_man(q)   # 客先文面には提示単価のみ（内部の利益ロジック「社内単価＋5万」は出さない）
     body = (tmpl
             .replace("{担当者名}", "ご担当者")
             .replace("{案件名}", cname)
