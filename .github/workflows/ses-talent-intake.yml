@@ -1,0 +1,67 @@
+name: 新人材 受付（Issue→台帳＋マッチ＋提案下書きPR自動生成）
+
+on:
+  issues:
+    types: [opened, labeled]
+
+# 人材台帳/プロフィール/提案下書きを生成しPRを開くため、書き込み権限を付与
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  intake:
+    # 「新人材」ラベルが付いたIssueだけ処理
+    if: contains(github.event.issue.labels.*.name, '新人材')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 人材を登録・案件台帳とマッチ・提案下書きを生成（決定論・LLM不使用）
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python automation/ses-matching/intake_talent.py --date "$(date +%F)"
+
+      - name: Eval gate（マッチ中核・人材受付・全体の退行検知）
+        run: python automation/ses-matching/eval/run_eval.py --stage all
+
+      - name: ブランチ作成・コミット・PR作成・Issueへ返信
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -e
+          BRANCH="intake/talent-${ISSUE_NUM}-$(date +%s)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          printf '%s\n' "feat(ses): 新人材受付 #${ISSUE_NUM}（${ISSUE_TITLE}）" "" "Issue #${ISSUE_NUM} のフォームから人材を台帳(talents.json)へ登録し、案件台帳と決定論マッチング、最有力案件への提案下書き(digests/)を自動生成（intake_talent.py）。マージで台帳反映。" > "$RUNNER_TEMP/commit.txt"
+          git commit -F "$RUNNER_TEMP/commit.txt"
+          git push -u origin "$BRANCH"
+          printf '%s\n' \
+            "Issue #${ISSUE_NUM} の受付フォームから自動生成しました（決定論・LLM不使用）。" \
+            "" \
+            "## マージ前チェック（代表）" \
+            "- [ ] 人材プロフィール（人材_*.md §2）の自動マッチ判定（本命/提案可/参考）が妥当か" \
+            "- [ ] 提案下書き（digests/proposal-*.txt）：年齢が入っていない／宛先（案件元担当）を確認して入力" \
+            "- [ ] 客先貼付サマリー（§3 MAIL-BLOCK）に年齢が出ていないか" \
+            "- [ ] 希望単価と案件のクライアント単価で粗利が取れるか（本命は粗利OK済み）" \
+            "" \
+            "問題なければ Merge で人材台帳に反映されます。**送信は必ず代表が手動（sales@から）**。" \
+            "" \
+            "closes #${ISSUE_NUM}" > "$RUNNER_TEMP/pr-body.md"
+          PR_URL=$(gh pr create --base "$BASE" --head "$BRANCH" \
+            --title "新人材反映: ${ISSUE_TITLE} (#${ISSUE_NUM})" \
+            --body-file "$RUNNER_TEMP/pr-body.md")
+          printf '%s\n' \
+            "✅ 人材登録＋提案下書きPRを作成しました：${PR_URL}" \
+            "この人材は今後、案件を投入した際の自動マッチ対象になります。下書きは digests/ にあり、宛先を確認のうえ sales@ から手動送信してください。" > "$RUNNER_TEMP/comment.md"
+          gh issue comment "${ISSUE_NUM}" --body-file "$RUNNER_TEMP/comment.md"

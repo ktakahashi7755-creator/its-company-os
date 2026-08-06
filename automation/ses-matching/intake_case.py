@@ -209,7 +209,32 @@ def main():
         f.write("\n")
     with open(case_path, "w", encoding="utf-8") as f:
         f.write(case_md)
+    # 案件台帳（data/cases.json）へも upsert＝「人材を投入」時のマッチ対象にする（対称化）。
+    # 台帳更新は本体（設定生成）を止めない＝失敗しても握り潰す。
+    _upsert_case_ledger(form, active)
     print(f"[intake] 生成: active-case.json / 案件_{case_id}.md（軸={active['axis']}・年齢上限={active['age_hard_limit']}・鮮度{active['fresh_days']}日・本命{active['pickup_min']}点）")
+
+
+def _upsert_case_ledger(form, active):
+    """新案件を data/cases.json へ登録（人材投入時の自動マッチ対象）。match_core が読める形。"""
+    try:
+        import match_core as MC   # 局所import＝案件生成の決定論部を重い依存で汚さない
+        jd = _field(form, "JD", "案件内容", "業務内容", "案件JD")
+        rec = {
+            "case_id": active["case_id"],
+            "case_title": active.get("case_title") or active["case_id"],
+            "axis": active.get("axis"),
+            "age_hard_limit": active.get("age_hard_limit"),
+            "client_rate": active.get("client_rate"),
+            "engineer_rate_pref": active.get("engineer_rate_pref"),
+            "pickup_min": active.get("pickup_min"),
+            "status": "active",
+            "skills": jd,                     # 案件×人材マッチの本文（JD原文）
+            "updated": active.get("updated"),
+        }
+        MC.save_cases(MC.upsert(MC.load_cases(), rec, "case_id"))
+    except Exception as e:  # noqa  台帳更新の失敗は致命ではない
+        print(f"[intake] 注意: 案件台帳の更新に失敗（設定は生成済み）: {e}")
 
 
 if __name__ == "__main__":
