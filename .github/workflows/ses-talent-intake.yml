@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   intake:
-    # 「新人材」ラベルが付いたIssueだけ処理
-    if: contains(github.event.issue.labels.*.name, '新人材')
+    # 「新人材」ラベル、または受付フォームのタイトル接頭辞「[新人材]」で起動（ラベル未作成でも確実に発火）
+    if: ${{ contains(github.event.issue.labels.*.name, '新人材') || startsWith(github.event.issue.title, '[新人材]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

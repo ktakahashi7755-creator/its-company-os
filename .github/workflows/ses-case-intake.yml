@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   intake:
-    # 「新案件」ラベルが付いたIssueだけ処理
-    if: contains(github.event.issue.labels.*.name, '新案件')
+    # 「新案件」ラベル、または受付フォームのタイトル接頭辞「[新案件]」で起動（ラベル未作成でも確実に発火）
+    if: ${{ contains(github.event.issue.labels.*.name, '新案件') || startsWith(github.event.issue.title, '[新案件]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
