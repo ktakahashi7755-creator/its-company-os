@@ -58,10 +58,20 @@ jobs:
             "問題なければ Merge で人材台帳に反映されます。**送信は必ず代表が手動（sales@から）**。" \
             "" \
             "closes #${ISSUE_NUM}" > "$RUNNER_TEMP/pr-body.md"
-          PR_URL=$(gh pr create --base "$BASE" --head "$BRANCH" \
-            --title "新人材反映: ${ISSUE_TITLE} (#${ISSUE_NUM})" \
-            --body-file "$RUNNER_TEMP/pr-body.md")
-          printf '%s\n' \
-            "✅ 人材登録＋提案下書きPRを作成しました：${PR_URL}" \
-            "この人材は今後、案件を投入した際の自動マッチ対象になります。下書きは digests/ にあり、宛先を確認のうえ sales@ から手動送信してください。" > "$RUNNER_TEMP/comment.md"
+          COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${BASE}...${BRANCH}?expand=1"
+          # 自動PR作成を試み、リポジトリ設定で無効なら1タップのPR作成リンクを返す（管理者設定不要で使える）
+          if PR_URL=$(gh pr create --base "$BASE" --head "$BRANCH" \
+                --title "新人材反映: ${ISSUE_TITLE} (#${ISSUE_NUM})" \
+                --body-file "$RUNNER_TEMP/pr-body.md" 2>"$RUNNER_TEMP/pr-err.txt"); then
+            printf '%s\n' \
+              "✅ 人材登録＋提案下書きPRを自動作成しました：${PR_URL}" \
+              "この人材は今後、案件を投入した際の自動マッチ対象になります。下書きは digests/ にあり、宛先を確認のうえ sales@ から手動送信してください。" > "$RUNNER_TEMP/comment.md"
+          else
+            printf '%s\n' \
+              "✅ 人材を登録し、ブランチ \`${BRANCH}\` に反映しました。下のリンクから**1タップでPRを作成**してください：" \
+              "" \
+              "${COMPARE_URL}" \
+              "" \
+              "（自動PR作成まで有効化するには Settings → Actions → General →「Allow GitHub Actions to create and approve pull requests」をON。下書きは digests/・送信は代表が手動）" > "$RUNNER_TEMP/comment.md"
+          fi
           gh issue comment "${ISSUE_NUM}" --body-file "$RUNNER_TEMP/comment.md"
