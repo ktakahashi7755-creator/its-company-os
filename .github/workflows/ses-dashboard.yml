@@ -1,0 +1,38 @@
+name: 運用ダッシュボード再生成（台帳→dashboard.html）
+
+# 台帳（cases.json / talents.json / active-case.json）や生成器が変わったら、
+# 実データから dashboard.html を再生成してコミットする。＝画面が常に台帳の最新を映す。
+on:
+  push:
+    branches: [claude/focused-bell-kt8d7o]
+    paths:
+      - 'automation/ses-matching/data/**'
+      - 'automation/ses-matching/active-case.json'
+      - 'automation/ses-matching/build_dashboard.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ダッシュボードを実データから再生成
+        run: python automation/ses-matching/build_dashboard.py --stamp "$(date -u +%Y-%m-%dT%H:%MZ)"
+      - name: 変更があればコミット
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- automation/ses-matching/dashboard.html; then
+            git add automation/ses-matching/dashboard.html
+            git commit -m "chore(ses): 運用ダッシュボードを台帳から再生成"
+            git push
+          else
+            echo "ダッシュボードに変更なし"
+          fi
