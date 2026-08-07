@@ -763,12 +763,124 @@ def eval_intake():
     return ok == tot
 
 
+def eval_matchcore():
+    """案件×人材の決定論マッチ（match_core.score_match・両刀/年齢/粗利ガード）を検証。
+    「投入→自動マッチング」の心臓部。決定論・APIキー不要。active-case.json に非依存（軸は明示引数）。"""
+    import match_core as MC
+    print("── 案件×人材 決定論マッチ（match_core・両刀/年齢/粗利）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    # 単価パース
+    chk("希望単価レンジ→下限(80)", MC.parse_rate_man("80〜90万") == 80)
+    chk("円表記→万(85)", MC.parse_rate_man("850000") == 85)
+    chk("クライアント上限(120)", MC.client_rate_max_man("100〜120万") == 120)
+    # 非単価の数値（時間・％・人数）を単価と誤読しない（'160h/月 90万'の160を拾わない）
+    chk("時間混入→90万のみ", MC.client_rate_max_man("160h/月 90万") == 90 and MC.parse_rate_man("160h/月 90万") == 90)
+    chk("全角時間混入→90万のみ", MC.client_rate_max_man("月160時間 90万") == 90)
+    chk("読めない単価→None", MC.parse_rate_man("応相談") is None and MC.client_rate_max_man("") is None)
+
+    case = {"axis": "サーバ×NW", "age_hard_limit": 35, "client_rate": "100〜120万",
+            "engineer_rate_pref": "80〜90万", "pickup_min": 85}
+    good = {"name": "T.K", "age": "32歳", "rate": "85万", "availability": "即日",
+            "skills": "Linux/RHEL/VMware でサーバ構築、Cisco L2/L3 でネットワーク設計。情シス常駐。"}
+    m = MC.score_match(case, good)
+    chk("両刀成立→axis_ok", m["axis_ok"] is True)
+    chk("年齢32→ok", m["age"] == "ok")
+    chk("粗利ok(35万)", m["rate"]["verdict"] == "ok" and m["rate"]["margin"] == 35)
+    chk("本命判定(pickup)", m["pickup"] is True and m["verdict"] == "本命")
+    chk("スコア>=85", m["score"] >= 85)
+
+    server_only = {"name": "S.O", "age": "30歳", "rate": "80万", "availability": "即日",
+                   "skills": "Windows Server/AD/VMware 仮想基盤専任。サーバ運用のみ。"}
+    m2 = MC.score_match(case, server_only)
+    chk("片刀→axis_ok False", m2["axis_ok"] is False)
+    chk("片刀→本命でない＋片刀フラグ", m2["pickup"] is False and any("片刀" in f for f in m2["flags"]))
+
+    old = {"name": "R.T", "age": "38歳", "rate": "85万", "availability": "即日", "skills": good["skills"]}
+    m3 = MC.score_match(case, old)
+    chk("38歳→除外・本命不可", m3["verdict"] == "除外" and m3["pickup"] is False)
+    chk("38歳→年齢ハード超フラグ", any("年齢ハード超" in f for f in m3["flags"]))
+
+    uncertain = {"name": "U.N", "age": "30代", "rate": "85万", "availability": "即日", "skills": good["skills"]}
+    m4 = MC.score_match(case, uncertain)
+    chk("30代(跨ぐ)→年齢要確認・本命保留", m4["pickup"] is False and any("年齢要確認" in f for f in m4["flags"]))
+
+    neg = {"name": "H.R", "age": "30歳", "rate": "130万", "availability": "即日", "skills": good["skills"]}
+    m5 = MC.score_match(case, neg)
+    chk("希望>上限→粗利不足フラグ・本命不可", m5["pickup"] is False and any("粗利不足" in f for f in m5["flags"]))
+
+    ranked = MC.match_talent_to_cases(good, [case])
+    chk("突き合わせ先頭が本命", ranked and ranked[0]["match"]["verdict"] == "本命")
+
+    # 上限無効(None)なら年齢で除外しない（一般ガードレール維持）
+    case_noage = dict(case); case_noage["age_hard_limit"] = None
+    chk("上限None→38歳も除外しない", MC.score_match(case_noage, old)["verdict"] != "除外")
+    print(f"   決定論マッチ 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
+def eval_talent_intake():
+    """人材受付（intake_talent）の決定論生成を検証：フォーム解析・年齢除去・案件マッチ・提案下書き。
+    「人材を投入→自動マッチ→下書き」の対称フロー。決定論・APIキー不要。"""
+    import intake_talent as IT
+    import match_core as MC
+    print("── 人材受付 intake_talent（フォーム→台帳→マッチ→下書き・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    body = (
+        "### 識別名（イニシャル）\n\nT.K\n\n"
+        "### スキルシート（本文貼り付け）\n\n35歳 / インフラ8年\n"
+        "Linux(RHEL)/VMware でサーバ、Cisco L2・L3 でネットワーク。情シス常駐。\n希望85万 即日\n\n"
+        "### 両刀の軸ヒント\n\nサーバ×NW\n\n"
+        "### 年齢\n\n32歳\n\n"
+        "### 希望単価\n\n85万\n\n"
+        "### 稼働時期\n\n即日\n\n"
+        "### 所属BP/配信元\n\nサンプルBP\n")
+    talent = IT.build_talent(IT.parse_issue_form(body), "2026-08-06")
+    chk("氏名=T.K", talent["name"] == "T.K")
+    chk("年齢=32歳", talent["age"] == "32歳")
+    chk("希望単価=85万", talent["rate"] == "85万")
+    chk("稼働=即日", talent["availability"] == "即日")
+    chk("人材ID=日付+slug", talent["talent_id"] == "20260806_T.K")
+    chk("サマリーに年齢(歳)が出ない", "歳" not in talent["summary"])
+
+    case = {"case_id": "C1", "case_title": "遊技機 情シスPL", "axis": "サーバ×NW", "age_hard_limit": 35,
+            "client_rate": "100〜120万", "engineer_rate_pref": "80〜90万", "pickup_min": 85, "skills": ""}
+    matches = MC.match_talent_to_cases(talent, [case])
+    chk("投入人材が案件に本命マッチ", matches[0]["match"]["verdict"] == "本命")
+
+    draft = IT.build_proposal_draft(talent, matches[0])
+    chk("下書きFrom=sales@", "From: sales@its-tokyo.com" in draft)
+    chk("下書きに案件名", "遊技機 情シスPL" in draft)
+    chk("下書きに年齢を出さない", "歳" not in draft)
+    chk("下書きにREOorGA不在", "reorga" not in draft.lower())
+    chk("提案単価は要員向け(80〜90万)", "80〜90万" in draft and "100〜120万" not in draft)
+
+    # プロフィールMD：客先貼付サマリーに年齢が出ない
+    profile = IT.build_profile_md(talent, matches, "2026-08-06")
+    mb = profile.split("MAIL-BLOCK-START -->")[1]
+    chk("プロフィールMAIL-BLOCKに年齢が出ない", "歳" not in mb)
+    print(f"   人材受付 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
-                             "watermark", "reconcile", "pickup", "agegate", "intake", "scoring", "all"],
+                             "watermark", "reconcile", "pickup", "agegate", "intake",
+                             "matchcore", "talent_intake", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -807,6 +919,10 @@ def main():
         results.append(eval_agegate())
     if args.stage in ("intake", "all"):
         results.append(eval_intake())
+    if args.stage in ("matchcore", "all"):
+        results.append(eval_matchcore())
+    if args.stage in ("talent_intake", "all"):
+        results.append(eval_talent_intake())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）

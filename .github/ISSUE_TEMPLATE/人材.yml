@@ -1,0 +1,57 @@
+name: 新人材（SESマッチング）
+description: 新しい要員（人材）を登録します。スキルシートを貼るだけで、案件台帳と自動マッチングし提案下書きPRが作られます。
+title: "[新人材] "
+labels: ["新人材"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        このフォームを送信すると、**人材を台帳へ登録し・案件台帳と自動マッチングし・提案下書きPRを作成**します。
+        代表は **PRをマージ＋下書き確認するだけ**（会話のやり取り不要）。年齢は客先/案件元の文面に出しません。**送信は必ず代表が手動**。
+  - type: input
+    id: name
+    attributes:
+      label: 識別名（イニシャル等・短い識別名）
+      placeholder: 例）T.K
+    validations:
+      required: true
+  - type: textarea
+    id: skillsheet
+    attributes:
+      label: スキルシート（本文貼り付け）
+      description: スキルシートや要員配信の本文をそのまま貼ってください。年齢・希望単価も含めてOK（客先文面には年齢を出さず自動整形します）。両刀の軸（サーバ／ネットワーク等）が伝わる語を残すとマッチ精度が上がります。
+      placeholder: ■経歴 … ■スキル（サーバ/NW等） … ■希望単価 … ■稼働 …
+    validations:
+      required: true
+  - type: dropdown
+    id: axis
+    attributes:
+      label: 両刀の軸ヒント（任意・マッチは案件側の軸で判定）
+      description: この要員の主戦場。空でもスキルシート本文から判定します。
+      options:
+        - サーバ×NW（サーバ と ネットワーク 両方）
+        - NW×セキュリティ（ネットワーク と セキュリティ）
+        - サーバ×セキュリティ（サーバ と セキュリティ）
+        - 指定なし
+      default: 0
+  - type: input
+    id: age
+    attributes:
+      label: 年齢
+      description: 案件の年齢ハード上限（例35歳まで）で自動判定します。客先文面には出しません。
+      placeholder: 例）32歳
+  - type: input
+    id: rate
+    attributes:
+      label: 希望単価
+      placeholder: 例）85万
+  - type: input
+    id: avail
+    attributes:
+      label: 稼働時期
+      placeholder: 例）即日 / 9月〜
+  - type: input
+    id: bp
+    attributes:
+      label: 所属BP / 配信元（提案先の当たり）
+      placeholder: 例）〇〇株式会社

@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   intake:
-    # 「新案件」ラベルが付いたIssueだけ処理
-    if: contains(github.event.issue.labels.*.name, '新案件')
+    # 「新案件」ラベル、または受付フォームのタイトル接頭辞「[新案件]」で起動（ラベル未作成でも確実に発火）
+    if: ${{ contains(github.event.issue.labels.*.name, '新案件') || startsWith(github.event.issue.title, '[新案件]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -58,10 +58,20 @@ jobs:
             "問題なければ Merge で反映されます。旧アクティブ案件は archive/ に退避済み。" \
             "" \
             "closes #${ISSUE_NUM}" > "$RUNNER_TEMP/pr-body.md"
-          PR_URL=$(gh pr create --base "$BASE" --head "$BRANCH" \
-            --title "新案件反映: ${ISSUE_TITLE} (#${ISSUE_NUM})" \
-            --body-file "$RUNNER_TEMP/pr-body.md")
-          printf '%s\n' \
-            "✅ 設定PRを作成しました：${PR_URL}" \
-            "マージすればこの案件で自動マッチングが動きます（毎朝7:00 JST狙い＋手動実行可）。文面や軸を直したい場合はPR上で編集してからマージしてください。" > "$RUNNER_TEMP/comment.md"
+          COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${BASE}...${BRANCH}?expand=1"
+          # 自動PR作成を試み、リポジトリ設定で無効なら1タップのPR作成リンクを返す（管理者設定不要で使える）
+          if PR_URL=$(gh pr create --base "$BASE" --head "$BRANCH" \
+                --title "新案件反映: ${ISSUE_TITLE} (#${ISSUE_NUM})" \
+                --body-file "$RUNNER_TEMP/pr-body.md" 2>"$RUNNER_TEMP/pr-err.txt"); then
+            printf '%s\n' \
+              "✅ 設定PRを自動作成しました：${PR_URL}" \
+              "マージすればこの案件で自動マッチングが動きます（毎朝7:00 JST狙い＋手動実行可）。文面や軸を直したい場合はPR上で編集してからマージしてください。" > "$RUNNER_TEMP/comment.md"
+          else
+            printf '%s\n' \
+              "✅ 案件設定をブランチ \`${BRANCH}\` に反映しました。下のリンクから**1タップでPRを作成**してください：" \
+              "" \
+              "${COMPARE_URL}" \
+              "" \
+              "（自動PR作成まで有効化するには Settings → Actions → General →「Allow GitHub Actions to create and approve pull requests」をON。マージでこの案件の自動マッチングが動きます）" > "$RUNNER_TEMP/comment.md"
+          fi
           gh issue comment "${ISSUE_NUM}" --body-file "$RUNNER_TEMP/comment.md"
