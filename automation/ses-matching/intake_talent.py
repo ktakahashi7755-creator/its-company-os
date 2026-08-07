@@ -170,8 +170,8 @@ def main():
 
     talent, profile_md, matches = run(body, args.date)
     profile_path = os.path.join(HERE, f"人材_{talent['talent_id']}.md")
-    # 最有力（除外でない）案件への提案下書き
-    top = next((r for r in matches if r["match"]["verdict"] != "除外"), None)
+    # 提案下書きは「本命／提案可」の実マッチのみ生成（参考・除外では下書きを作らない＝空振り防止）
+    top = next((r for r in matches if r["match"]["verdict"] in ("本命", "提案可")), None)
     draft = build_proposal_draft(talent, top) if top else None
 
     if args.dry_run:

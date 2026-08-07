@@ -779,6 +779,10 @@ def eval_matchcore():
     chk("希望単価レンジ→下限(80)", MC.parse_rate_man("80〜90万") == 80)
     chk("円表記→万(85)", MC.parse_rate_man("850000") == 85)
     chk("クライアント上限(120)", MC.client_rate_max_man("100〜120万") == 120)
+    # 非単価の数値（時間・％・人数）を単価と誤読しない（'160h/月 90万'の160を拾わない）
+    chk("時間混入→90万のみ", MC.client_rate_max_man("160h/月 90万") == 90 and MC.parse_rate_man("160h/月 90万") == 90)
+    chk("全角時間混入→90万のみ", MC.client_rate_max_man("月160時間 90万") == 90)
+    chk("読めない単価→None", MC.parse_rate_man("応相談") is None and MC.client_rate_max_man("") is None)
 
     case = {"axis": "サーバ×NW", "age_hard_limit": 35, "client_rate": "100〜120万",
             "engineer_rate_pref": "80〜90万", "pickup_min": 85}

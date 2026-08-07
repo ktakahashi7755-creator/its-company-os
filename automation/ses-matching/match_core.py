@@ -24,23 +24,30 @@ PICKUP_MIN_DEFAULT = 85
 
 
 # ---------- 単価パース ----------
+# 単価文字列に紛れる「非単価の数値」（時間・％・人数・拠点数等）を除去してから金額を読む。
+# 例 '160h/月 90万'・'月160時間 90万' の 160 を単価と誤読しないため。
+_NONRATE_UNIT = re.compile(r"\d+\s*(?:h|ｈ|時間|時|％|%|名|人|日|拠点|台|件|ヶ月|か月|箇月)", re.IGNORECASE)
+
+
+def _rate_numbers(s):
+    """単価文字列 → 万単位の数値リスト（円表記 4桁以上は万換算）。非単価の数値は除去。"""
+    s = str(s or "").replace(",", "")
+    s = _NONRATE_UNIT.sub(" ", s)                       # 時間/％/人数等を落とす（誤読防止）
+    nums = [int(x) for x in re.findall(r"\d+", s)]
+    return [round(n / 10000) if n >= 1000 else n for n in nums]   # 円(≥1000)→万
+
+
 def parse_rate_man(s):
-    """要員希望単価 '85万'/'80〜90万'/'800000' → 万単位の代表値（レンジは下限＝要員が受ける最低）。
-    読めなければ None。円表記（>=1000）は万に丸める。"""
-    nums = [int(x) for x in re.findall(r"\d+", str(s or "").replace(",", ""))]
-    if not nums:
-        return None
-    v = min(nums)                       # レンジは下限を要員希望として使う（保守的）
-    return round(v / 10000) if v >= 1000 else v
+    """要員希望単価 '85万'/'80〜90万'/'850000' → 万単位の代表値（レンジは下限＝要員が受ける最低）。
+    読めなければ None。時間/％等の非単価数値は無視する。"""
+    nums = _rate_numbers(s)
+    return min(nums) if nums else None
 
 
 def client_rate_max_man(s):
     """クライアント支払 '100〜120万' → 上限120（粗利計算の上側）。読めなければ None。"""
-    nums = [int(x) for x in re.findall(r"\d+", str(s or "").replace(",", ""))]
-    if not nums:
-        return None
-    v = max(nums)
-    return round(v / 10000) if v >= 1000 else v
+    nums = _rate_numbers(s)
+    return max(nums) if nums else None
 
 
 # ---------- 軸（両刀）・年齢・単価 判定 ----------
