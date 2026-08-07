@@ -874,13 +874,54 @@ def eval_talent_intake():
     return ok == tot
 
 
+def eval_dashboard():
+    """運用ダッシュボード生成（build_dashboard）を検証：実データ→有効HTML・ガードレール反映・
+    インラインhandler無し（CSP安全）・投入は実Issueフォーム直リンク・年齢ハード超は除外表示。決定論。"""
+    import build_dashboard as BD
+    import match_core as MC
+    print("── 運用ダッシュボード生成（build_dashboard・実データ→HTML・決定論）")
+    ok = tot = 0
+
+    def chk(label, cond):
+        nonlocal ok, tot
+        tot += 1; ok += 1 if cond else 0
+        print(f"   {'✔' if cond else '✗'} [{label}]")
+
+    saved_lt, saved_lc, saved_ac = MC.load_talents, MC.load_cases, R.ACTIVE_CASE
+    MC.load_talents = lambda: [
+        {"name": "T.K", "age": "32歳", "rate": "85万", "availability": "即日", "axis_hint": "サーバ×NW",
+         "skills": "Linux/RHEL/VMware サーバ構築、Cisco L2/L3 ネットワーク設計、情シス常駐"},
+        {"name": "R.T", "age": "38歳", "rate": "95万", "availability": "即日",
+         "skills": "Linux/Cisco 両刀 20年"}]
+    _case = {"case_id": "C1", "case_title": "遊技機PL", "axis": "サーバ×NW", "age_hard_limit": 35,
+             "client_rate": "100〜120万", "engineer_rate_pref": "80〜90万", "pickup_min": 85,
+             "status": "active", "skills": ""}
+    MC.load_cases = lambda: [_case]
+    R.ACTIVE_CASE = dict(_case)
+    try:
+        h = BD.build_html("2026-08-07 07:00")
+        chk("有効HTML（title/閉body）", "<title>" in h and "</html>" in h)
+        chk("インラインhandler無し（CSP安全）", "onclick=" not in h and "onchange=" not in h)
+        chk("本命=T.K（32歳・両刀・粗利OK）", "T.K" in h and "本命候補なし" not in h)
+        chk("R.T(38歳)は除外表示", "除外" in h)
+        chk("投入は実Issueフォーム直リンク", "issues/new?template=" in h)
+        chk("客先に出す年齢はヒーローの内部表示のみ（文字化け無し）", "�" not in h)
+        frag = BD.to_fragment(h)
+        chk("Artifactフラグメント（doctype/body無し・style有）",
+            "<!doctype" not in frag.lower() and "<body>" not in frag and "<style>" in frag)
+    finally:
+        MC.load_talents, MC.load_cases, R.ACTIVE_CASE = saved_lt, saved_lc, saved_ac
+    print(f"   ダッシュボード生成 正解率： {ok}/{tot} = {ok/tot:.2f}")
+    return ok == tot
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage",
                     choices=["prefilter", "draft", "finalize", "drafts", "notion", "contact",
                              "dedup", "robustness", "notiondb", "backfill", "score_norm", "folder",
                              "watermark", "reconcile", "pickup", "agegate", "intake",
-                             "matchcore", "talent_intake", "scoring", "all"],
+                             "matchcore", "talent_intake", "dashboard", "scoring", "all"],
                     default="prefilter")
     args = ap.parse_args()
     print(f"[eval] provider={R.LLM_PROVIDER} base_date={BASE_DATE}")
@@ -923,6 +964,8 @@ def main():
         results.append(eval_matchcore())
     if args.stage in ("talent_intake", "all"):
         results.append(eval_talent_intake())
+    if args.stage in ("dashboard", "all"):
+        results.append(eval_dashboard())
     if args.stage in ("scoring", "all"):
         results.append(eval_scoring())
     # 決定論部分に失敗があれば非0で返す（CI/反復で退行検知）
